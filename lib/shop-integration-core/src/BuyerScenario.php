@@ -25,8 +25,11 @@ final class BuyerScenario
 
     const NON_EU = 'non_eu';
 
-    /** EU company whose VAT id failed VIES, invoiced with domestic rates (settings fallback). */
+    /** EU company invoiced with Polish rates: VAT id failed VIES (settings fallback) or the shop charged VAT. */
     const EU_B2B_DOMESTIC = 'eu_b2b_domestic';
+
+    /** Non-EU buyer invoiced with Polish rates because the shop charged VAT (no export rule). */
+    const NON_EU_DOMESTIC = 'non_eu_domestic';
 
     public static function classify(string $country, bool $hasTaxId): string
     {
@@ -74,6 +77,7 @@ final class BuyerScenario
             case self::EU_B2B_DOMESTIC:
                 return $settings->euB2bEnabled;
             case self::NON_EU:
+            case self::NON_EU_DOMESTIC:
                 return $settings->nonEuEnabled;
             default:
                 return true;

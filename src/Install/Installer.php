@@ -44,6 +44,8 @@ final class Installer
                 `last_error` VARCHAR(1000) NOT NULL DEFAULT '',
                 `corrections` TEXT NULL,
                 `scenario` VARCHAR(32) NOT NULL DEFAULT '',
+                `warnings` TEXT NULL,
+                `payload_hash` VARCHAR(32) NOT NULL DEFAULT '',
                 `date_add` DATETIME NOT NULL,
                 `date_upd` DATETIME NOT NULL,
                 PRIMARY KEY (`id_order`)

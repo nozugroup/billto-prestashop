@@ -17,6 +17,9 @@ final class OrderPayloadBuilder
     /** @var Settings */
     private $settings;
 
+    /** @var string[] Settings::WARNING_* codes collected while building the current order */
+    private $warnings = [];
+
     public function __construct(Settings $settings)
     {
         $this->settings = $settings;
@@ -24,14 +27,34 @@ final class OrderPayloadBuilder
 
     /**
      * `blocker` is a Settings::BLOCKER_* code when the order must not be sent as is (the plugin
-     * records the matching message), null otherwise.
+     * records the matching message), null otherwise. `warnings` lists Settings::WARNING_* codes:
+     * the payload is consistent with what the shop charged, but not what the buyer scenario would
+     * normally produce, so the merchant should look at the order (and usually at the shop's tax rules).
      *
      * @param string|null $viesStatus Result of the VIES check for EU companies, or null
-     * @return array{payload: array<string, mixed>, lineMap: array<string, int>, hasNegativeLines: bool, scenario: string, blocker: string|null}
+     * @return array{payload: array<string, mixed>, lineMap: array<string, int>, hasNegativeLines: bool, scenario: string, blocker: string|null, warnings: string[]}
      */
     public function build(Order $order, ?string $viesStatus = null, bool $confirmed = true): array
     {
+        $this->warnings = [];
         $scenario = BuyerScenario::effective($order->buyer, $this->settings, $viesStatus);
+
+        if ($scenario === BuyerScenario::EU_B2B_DOMESTIC && $viesStatus === Vies\Vies::INVALID) {
+            $this->warnings[] = Settings::WARNING_VIES_INVALID_DOMESTIC;
+        }
+
+        // The shop charged VAT to a foreign buyer (no reverse-charge / export rule configured): invoice
+        // what was actually paid, with Polish rates, instead of a 0% document lower than the payment.
+        if ($this->settings->foreignTaxedFollowsShop && $this->highestProductRate($order) !== null) {
+            if ($scenario === BuyerScenario::EU_B2B) {
+                $scenario = BuyerScenario::EU_B2B_DOMESTIC;
+                $this->warnings[] = Settings::WARNING_FOREIGN_TAXED;
+            } elseif ($scenario === BuyerScenario::NON_EU) {
+                $scenario = BuyerScenario::NON_EU_DOMESTIC;
+                $this->warnings[] = Settings::WARNING_FOREIGN_TAXED;
+            }
+        }
+
         $lines = $this->lines($order, $scenario);
         $hasNegative = NegativeLines::hasNegative($lines);
         $blocker = $this->blocker($order, $scenario);
@@ -62,7 +85,14 @@ final class OrderPayloadBuilder
             'notes' => $this->notes($order),
         ];
 
-        return ['payload' => $payload, 'lineMap' => $lineMap, 'hasNegativeLines' => $hasNegative, 'scenario' => $scenario, 'blocker' => $blocker];
+        return [
+            'payload' => $payload,
+            'lineMap' => $lineMap,
+            'hasNegativeLines' => $hasNegative,
+            'scenario' => $scenario,
+            'blocker' => $blocker,
+            'warnings' => array_values(array_unique($this->warnings)),
+        ];
     }
 
     /** Highest positive tax percentage among the product lines, null when no product carries VAT. */
@@ -161,6 +191,10 @@ final class OrderPayloadBuilder
                 && $goodsRate !== null
                 && $scenario !== BuyerScenario::EU_B2B
                 && $scenario !== BuyerScenario::NON_EU;
+
+            if ($followsGoods) {
+                $this->warnings[] = Settings::WARNING_UNTAXED_EXTRAS;
+            }
 
             $item = [
                 'name' => mb_substr($name, 0, 255),

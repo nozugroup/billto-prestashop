@@ -155,6 +155,29 @@ final class OrderSync
         return (bool) $state->delivery || (bool) $state->shipped;
     }
 
+    /** Polish message for a core warning code (Settings::WARNING_*). */
+    public function warningLabel(string $code): string
+    {
+        switch ($code) {
+            case Settings::WARNING_FOREIGN_TAXED:
+                return $this->module->l('Sklep naliczył polski VAT nabywcy zagranicznemu, więc faktura ma stawki polskie zamiast 0% WDT / eksportu. Jeśli to sprzedaż 0%, dodaj regułę podatkową 0% dla tego kraju w PrestaShop.', 'ordersync');
+            case Settings::WARNING_UNTAXED_EXTRAS:
+                return $this->module->l('Dostawa lub opłata bez podatku w sklepie dostała stawkę towarów. Sprawdź reguły podatkowe przewoźnika.', 'ordersync');
+            case Settings::WARNING_VIES_INVALID_DOMESTIC:
+                return $this->module->l('Numer VAT UE nabywcy jest nieaktywny w VIES; faktura ze stawkami polskimi zamiast 0% WDT.', 'ordersync');
+            default:
+                return $code;
+        }
+    }
+
+    /** @return string[] */
+    public function warningLabels(int $idOrder): array
+    {
+        $record = OrderRecord::find($idOrder);
+
+        return $record === null ? [] : array_map([$this, 'warningLabel'], $record->warnings);
+    }
+
     public function scenarioLabel(int $idOrder): string
     {
         $record = OrderRecord::find($idOrder);
@@ -170,9 +193,11 @@ final class OrderSync
             case BuyerScenario::EU_B2B:
                 return $this->module->l('firma z UE (WDT / np)', 'ordersync');
             case BuyerScenario::EU_B2B_DOMESTIC:
-                return $this->module->l('firma z UE, VAT nieaktywny (stawki polskie)', 'ordersync');
+                return $this->module->l('firma z UE ze stawkami polskimi (sklep naliczył VAT lub numer VAT nieaktywny)', 'ordersync');
             case BuyerScenario::NON_EU:
                 return $this->module->l('nabywca spoza UE (eksport / np)', 'ordersync');
+            case BuyerScenario::NON_EU_DOMESTIC:
+                return $this->module->l('nabywca spoza UE ze stawkami polskimi (sklep naliczył VAT)', 'ordersync');
             default:
                 return $scenario;
         }
@@ -218,6 +243,12 @@ final class OrderSync
 
         $client = $this->clientFor();
         $payload = $built['payload'];
+        $hash = md5((string) json_encode($payload));
+
+        // Status changes and back-office saves fire the update hook without changing anything relevant.
+        if ($record->billtoOrderId !== '' && $record->payloadHash === $hash) {
+            return $record->billtoOrderId;
+        }
 
         try {
             if ($record->billtoOrderId !== '') {
@@ -253,8 +284,14 @@ final class OrderSync
         $record->billtoOrderNumber = (string) (isset($data['order_number']) ? $data['order_number'] : '');
         $record->lineMap = $built['lineMap'];
         $record->scenario = $built['scenario'];
+        $record->warnings = $built['warnings'];
+        $record->payloadHash = $hash;
         $record->lastError = '';
         $record->save();
+
+        foreach ($built['warnings'] as $code) {
+            $this->logger->warning(sprintf('Order #%d: %s', $idOrder, $this->warningLabel($code)));
+        }
 
         $this->logger->info(sprintf('Order #%d synced to BillTo order %s', $idOrder, $record->billtoOrderId));
 

@@ -31,6 +31,9 @@
       {if $billto_record.corrections}
         <p class="mb-1"><strong>{l s='Korekty' mod='billtoinvoices'}:</strong> {foreach from=$billto_record.corrections item=c name=corr}{$c.invoice_number|escape:'html':'UTF-8'}{if !$smarty.foreach.corr.last}, {/if}{/foreach}</p>
       {/if}
+      {foreach from=$billto_warnings item=warning}
+        <p class="text-warning mb-1"><strong>{l s='Ostrzeżenie' mod='billtoinvoices'}:</strong> {$warning|escape:'html':'UTF-8'}</p>
+      {/foreach}
       {if $billto_record.last_error}
         <p class="text-danger mb-1"><strong>{l s='Ostatni błąd' mod='billtoinvoices'}:</strong> {$billto_record.last_error|escape:'html':'UTF-8'}</p>
       {/if}

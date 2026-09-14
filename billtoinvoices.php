@@ -150,6 +150,7 @@ class BilltoInvoices extends Module
             'billto_id_order' => $idOrder,
             'billto_sandbox' => $this->config->isSandbox(),
             'billto_scenario_label' => $record ? $this->orderSync()->scenarioLabel($idOrder) : '',
+            'billto_warnings' => $record ? $this->orderSync()->warningLabels($idOrder) : [],
         ]);
 
         return $this->display(__FILE__, 'views/templates/hook/admin_order_side.tpl');

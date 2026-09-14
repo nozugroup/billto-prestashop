@@ -24,6 +24,16 @@ final class VatMapper
                 return $isService ? 'np I' : '0 WDT';
             case BuyerScenario::NON_EU:
                 return $isService ? 'np II' : '0 EX';
+            case BuyerScenario::EU_B2B_DOMESTIC:
+            case BuyerScenario::NON_EU_DOMESTIC:
+                // Foreign buyer treated as domestic (failed VIES, or VAT charged by the shop). A line the
+                // shop left at 0% cannot become 0 KR: without a valid VAT id there is no 0% WDT / export,
+                // so the standard rate applies to the amount collected.
+                if ($line->taxPercent === null || $line->taxPercent <= 0.0) {
+                    return '23';
+                }
+
+                return self::domestic($line->taxPercent, $settings);
             default:
                 return self::domestic($line->taxPercent, $settings);
         }

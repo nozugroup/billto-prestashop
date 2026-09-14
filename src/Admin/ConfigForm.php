@@ -52,7 +52,7 @@ final class ConfigForm
         $errors = [];
 
         $lists = ['PAID_STATES', 'SETTLE_STATES', 'UNPAID_MODULES'];
-        $bools = ['CREATE_ON_CHECKOUT', 'KSEF_AUTO', 'REFUND_CORRECTIONS', 'EU_B2B_ENABLED', 'NON_EU_ENABLED', 'RESYNC_ON_EDIT', 'UNTAXED_EXTRAS_FOLLOW_GOODS'];
+        $bools = ['CREATE_ON_CHECKOUT', 'KSEF_AUTO', 'REFUND_CORRECTIONS', 'EU_B2B_ENABLED', 'NON_EU_ENABLED', 'RESYNC_ON_EDIT', 'UNTAXED_EXTRAS_FOLLOW_GOODS', 'FOREIGN_TAXED_FOLLOWS_SHOP'];
 
         foreach (array_keys(Config::defaults()) as $key) {
             if ($key === 'CRON_TOKEN' || in_array($key, $lists, true) || in_array($key, $bools, true)) {
@@ -192,6 +192,7 @@ final class ConfigForm
                     ['type' => 'switch', 'label' => $l('Firma z UE (numer VAT UE): 0% WDT / np'), 'name' => 'BILLTO_EU_B2B_ENABLED', 'is_bool' => true, 'values' => $this->yesNo()],
                     ['type' => 'select', 'label' => $l('Weryfikacja VIES'), 'name' => 'BILLTO_VIES_CHECK', 'options' => ['query' => [['id' => Settings::VIES_BLOCK, 'name' => $l('Sprawdzaj; nieaktywny numer = nie wystawiaj faktury')], ['id' => Settings::VIES_DOMESTIC, 'name' => $l('Sprawdzaj; nieaktywny numer = stawki polskie')], ['id' => Settings::VIES_OFF, 'name' => $l('Nie sprawdzaj')]], 'id' => 'id', 'name' => 'name']],
                     ['type' => 'switch', 'label' => $l('Nabywca spoza UE: 0% eksport / np'), 'name' => 'BILLTO_NON_EU_ENABLED', 'is_bool' => true, 'values' => $this->yesNo()],
+                    ['type' => 'switch', 'label' => $l('Zagraniczny nabywca z naliczonym VAT: stawki polskie'), 'name' => 'BILLTO_FOREIGN_TAXED_FOLLOWS_SHOP', 'is_bool' => true, 'values' => $this->yesNo(), 'desc' => $l('Gdy sklep naliczył polski VAT firmie z UE lub nabywcy spoza UE (brak reguły 0% dla tego kraju), faktura dostaje stawki polskie, czyli to, co klient zapłacił. Wyłączone: 0% WDT / eksport mimo pobranego VAT.')],
 
                     ['type' => 'select', 'label' => $l('Doręczenie faktury'), 'name' => 'BILLTO_DELIVERY_MODE', 'options' => ['query' => [['id' => Config::DELIVERY_BILLTO_EMAIL, 'name' => $l('E-mail z BillTo (PDF + strona z QR do przelewu)')], ['id' => Config::DELIVERY_LINK_ONLY, 'name' => $l('Tylko link do PDF w koncie klienta i w panelu')]], 'id' => 'id', 'name' => 'name']],
                     ['type' => 'text', 'label' => $l('Seria faktur VAT (id z BillTo)'), 'name' => 'BILLTO_SERIES_ID', 'desc' => $l('Puste = domyślna seria zespołu.') . ' ' . $this->seriesHint('VAT')],

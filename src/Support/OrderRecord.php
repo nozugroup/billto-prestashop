@@ -57,6 +57,12 @@ final class OrderRecord
     /** @var string */
     public $scenario = '';
 
+    /** @var string[] core warning codes from the last sync */
+    public $warnings = [];
+
+    /** @var string md5 of the last payload sent to BillTo; unchanged payload = no PUT */
+    public $payloadHash = '';
+
     public function __construct(int $idOrder)
     {
         $this->idOrder = $idOrder;
@@ -99,6 +105,8 @@ final class OrderRecord
         $record->lastError = (string) $row['last_error'];
         $record->corrections = self::decode($row['corrections']);
         $record->scenario = (string) $row['scenario'];
+        $record->warnings = array_values(array_map('strval', self::decode(isset($row['warnings']) ? $row['warnings'] : '[]')));
+        $record->payloadHash = (string) (isset($row['payload_hash']) ? $row['payload_hash'] : '');
 
         return $record;
     }
@@ -125,6 +133,8 @@ final class OrderRecord
             'last_error' => pSQL(mb_substr($this->lastError, 0, 1000)),
             'corrections' => pSQL(json_encode($this->corrections)),
             'scenario' => pSQL($this->scenario),
+            'warnings' => pSQL(json_encode(array_values($this->warnings))),
+            'payload_hash' => pSQL($this->payloadHash),
             'date_upd' => date('Y-m-d H:i:s'),
         ];
 
@@ -169,6 +179,7 @@ final class OrderRecord
             'corrections' => $this->corrections,
             'scenario' => $this->scenario,
             'vies' => $this->vies,
+            'warnings' => $this->warnings,
         ];
     }
 

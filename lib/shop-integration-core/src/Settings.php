@@ -39,6 +39,16 @@ final class Settings
     /** Blocker code: EU consumer order in "Polish rates" mode where the shop charged no VAT. */
     const BLOCKER_EU_CONSUMER_NO_VAT = 'eu_consumer_no_vat';
 
+    /**
+     * Warning codes: the core kept the invoice consistent with what the shop charged, but the order
+     * deviates from what its buyer scenario would normally produce. Plugins surface them on the order.
+     */
+    const WARNING_FOREIGN_TAXED = 'foreign_taxed_as_domestic';
+
+    const WARNING_UNTAXED_EXTRAS = 'untaxed_extras_follow_goods';
+
+    const WARNING_VIES_INVALID_DOMESTIC = 'vies_invalid_domestic';
+
     /** @var string net|gross */
     public $amountMode = self::AMOUNT_GROSS;
 
@@ -59,6 +69,16 @@ final class Settings
      * @var bool
      */
     public $untaxedExtrasFollowGoods = true;
+
+    /**
+     * Foreign buyer (EU company, non-EU) whose products the shop taxed anyway: the invoice must show
+     * what the customer paid, so the order is mapped with Polish rates (`eu_b2b_domestic` /
+     * `non_eu_domestic`) instead of 0% WDT / 0% export / np, which would make the invoice lower than
+     * the payment by the VAT amount. Set to false to keep the foreign mapping regardless.
+     *
+     * @var bool
+     */
+    public $foreignTaxedFollowsShop = true;
 
     /** @var string BillTo vat_type for a 0% shop rate on domestic sales */
     public $vatTypeForZeroRate = '0 KR';
