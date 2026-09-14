@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<module>
+    <name>billtoinvoices</name>
+    <displayName><![CDATA[BillTo - faktury i KSeF]]></displayName>
+    <version><![CDATA[0.1.0]]></version>
+    <description><![CDATA[Wystawia faktury VAT w BillTo dla zamówień PrestaShop: zamówienie trafia do BillTo, po opłaceniu powstaje faktura, opcjonalnie wysyłana do KSeF.]]></description>
+    <author><![CDATA[BillTo]]></author>
+    <tab><![CDATA[billing_invoicing]]></tab>
+    <is_configurable>1</is_configurable>
+    <need_instance>0</need_instance>
+    <limited_countries></limited_countries>
+</module>

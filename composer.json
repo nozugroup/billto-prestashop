@@ -1,0 +1,37 @@
+{
+    "name": "billto/billto-prestashop",
+    "description": "BillTo for PrestaShop - development dependencies only; the module has no runtime Composer dependencies.",
+    "type": "prestashop-module",
+    "license": "AFL-3.0",
+    "require": {
+        "php": ">=7.2"
+    },
+    "require-dev": {
+        "dealerdirect/phpcodesniffer-composer-installer": "^1.0",
+        "pestphp/pest": "^2.36",
+        "phpcompatibility/php-compatibility": "^9.3",
+        "squizlabs/php_codesniffer": "^3.10"
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "BillTo\\PrestaShop\\": "src/",
+            "BillTo\\Shop\\": "lib/shop-integration-core/src/",
+            "BillTo\\PrestaShop\\Tests\\": "tests/"
+        }
+    },
+    "scripts": {
+        "test": "pest",
+        "compat": "phpcs -p --standard=PHPCompatibility --runtime-set testVersion 7.2- src controllers billtoinvoices.php autoload.php",
+        "sync-core": "sh bin/sync-core.sh",
+        "check": ["@compat", "@test"]
+    },
+    "config": {
+        "sort-packages": true,
+        "allow-plugins": {
+            "pestphp/pest-plugin": true,
+            "dealerdirect/phpcodesniffer-composer-installer": true
+        }
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true
+}
