@@ -57,6 +57,7 @@ final class Config
             'NON_EU_ENABLED' => 1,
             'VIES_CHECK' => Settings::VIES_BLOCK,
             'EU_CONSUMER_NO_VAT' => Settings::EU_CONSUMER_NO_VAT_BLOCK,
+            'UNTAXED_EXTRAS_FOLLOW_GOODS' => 1,
             'SERIES_ID' => '',
             'KOR_SERIES_ID' => '',
             'OSS_SERIES_ID' => '',
@@ -203,6 +204,7 @@ final class Config
         $settings->vatTypeForNoTax = (string) $this->get('VAT_NO_TAX');
         $settings->ossMode = (string) $this->get('OSS_MODE');
         $settings->euConsumerNoVat = (string) $this->get('EU_CONSUMER_NO_VAT') === Settings::EU_CONSUMER_NO_VAT_MAP ? Settings::EU_CONSUMER_NO_VAT_MAP : Settings::EU_CONSUMER_NO_VAT_BLOCK;
+        $settings->untaxedExtrasFollowGoods = (bool) $this->get('UNTAXED_EXTRAS_FOLLOW_GOODS');
         $settings->euB2bEnabled = (bool) $this->get('EU_B2B_ENABLED');
         $settings->nonEuEnabled = (bool) $this->get('NON_EU_ENABLED');
         $settings->viesCheck = (string) $this->get('VIES_CHECK');

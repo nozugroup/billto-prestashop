@@ -52,7 +52,7 @@ final class ConfigForm
         $errors = [];
 
         $lists = ['PAID_STATES', 'SETTLE_STATES', 'UNPAID_MODULES'];
-        $bools = ['CREATE_ON_CHECKOUT', 'KSEF_AUTO', 'REFUND_CORRECTIONS', 'EU_B2B_ENABLED', 'NON_EU_ENABLED', 'RESYNC_ON_EDIT'];
+        $bools = ['CREATE_ON_CHECKOUT', 'KSEF_AUTO', 'REFUND_CORRECTIONS', 'EU_B2B_ENABLED', 'NON_EU_ENABLED', 'RESYNC_ON_EDIT', 'UNTAXED_EXTRAS_FOLLOW_GOODS'];
 
         foreach (array_keys(Config::defaults()) as $key) {
             if ($key === 'CRON_TOKEN' || in_array($key, $lists, true) || in_array($key, $bools, true)) {
@@ -182,6 +182,7 @@ final class ConfigForm
                     ['type' => 'switch', 'label' => $l('Aktualizuj zamówienie w BillTo po edycji w panelu'), 'name' => 'BILLTO_RESYNC_ON_EDIT', 'is_bool' => true, 'values' => $this->yesNo()],
 
                     ['type' => 'select', 'label' => $l('Tryb kwot'), 'name' => 'BILLTO_AMOUNT_MODE', 'options' => ['query' => [['id' => Settings::AMOUNT_GROSS, 'name' => $l('Brutto - BillTo liczy netto od ceny z podatkiem (zalecane)')], ['id' => Settings::AMOUNT_NET, 'name' => $l('Netto')]], 'id' => 'id', 'name' => 'name']],
+                    ['type' => 'switch', 'label' => $l('Dostawa bez podatku dziedziczy stawkę towarów'), 'name' => 'BILLTO_UNTAXED_EXTRAS_FOLLOW_GOODS', 'is_bool' => true, 'values' => $this->yesNo(), 'desc' => $l('Gdy sklep nie naliczył podatku od dostawy lub opłaty, a towary mają VAT, dostawa dostaje najwyższą stawkę towarów zamiast „zw" (świadczenie pomocnicze).')],
                     ['type' => 'select', 'label' => $l('Pozycje ujemne (rabaty koszykowe)'), 'name' => 'BILLTO_NEGATIVE_LINES', 'options' => ['query' => [['id' => Settings::NEGATIVE_DISTRIBUTE, 'name' => $l('Rozdziel rabat proporcjonalnie na pozycje')], ['id' => Settings::NEGATIVE_SKIP, 'name' => $l('Nie wysyłaj zamówienia, zapisz błąd')]], 'id' => 'id', 'name' => 'name']],
                     ['type' => 'select', 'label' => $l('Stawka 0% w sklepie'), 'name' => 'BILLTO_VAT_ZERO', 'options' => ['query' => $vatTypes, 'id' => 'id', 'name' => 'name']],
                     ['type' => 'select', 'label' => $l('Pozycja bez podatku'), 'name' => 'BILLTO_VAT_NO_TAX', 'options' => ['query' => $vatTypes, 'id' => 'id', 'name' => 'name']],

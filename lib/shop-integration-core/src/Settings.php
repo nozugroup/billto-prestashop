@@ -51,6 +51,15 @@ final class Settings
      */
     public $euConsumerNoVat = self::EU_CONSUMER_NO_VAT_BLOCK;
 
+    /**
+     * Shipping or fee left untaxed by the shop on an order whose goods carry VAT takes the highest
+     * product rate (ancillary supply shares the rate of the goods) instead of the no-tax / zero-rate
+     * mapping. Not applied to foreign B2B / non-EU orders, which have their own 0% / np mapping.
+     *
+     * @var bool
+     */
+    public $untaxedExtrasFollowGoods = true;
+
     /** @var string BillTo vat_type for a 0% shop rate on domestic sales */
     public $vatTypeForZeroRate = '0 KR';
 

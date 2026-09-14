@@ -65,6 +65,20 @@ final class OrderPayloadBuilder
         return ['payload' => $payload, 'lineMap' => $lineMap, 'hasNegativeLines' => $hasNegative, 'scenario' => $scenario, 'blocker' => $blocker];
     }
 
+    /** Highest positive tax percentage among the product lines, null when no product carries VAT. */
+    private function highestProductRate(Order $order): ?float
+    {
+        $rate = null;
+
+        foreach ($order->lines as $line) {
+            if ($line->isProduct() && $line->quantity > 0 && $line->taxPercent !== null && $line->taxPercent > 0.0) {
+                $rate = $rate === null ? $line->taxPercent : max($rate, $line->taxPercent);
+            }
+        }
+
+        return $rate;
+    }
+
     /**
      * An EU consumer invoiced with Polish rates must carry VAT; a line without VAT means the shop
      * has no tax rule for that country (or a B2B-style 0% rule), which would silently produce a
@@ -121,6 +135,7 @@ final class OrderPayloadBuilder
     {
         $gross = $this->settings->isGross();
         $hasGoods = $order->hasGoods();
+        $goodsRate = $this->highestProductRate($order);
         $result = [];
 
         foreach ($order->lines as $line) {
@@ -137,13 +152,25 @@ final class OrderPayloadBuilder
             $isService = $line->isProduct() ? $line->isService : ($line->type === Line::TYPE_FEE ? true : ! $hasGoods);
             $name = $line->type === Line::TYPE_SHIPPING ? $this->settings->shippingLabel.': '.$line->name : $line->name;
 
+            // Shipping / fee left untaxed by the shop while the goods carry VAT: an ancillary supply shares
+            // the rate of the goods (Polish VAT), so follow the highest product rate instead of zw / 0%.
+            $followsGoods = $this->settings->untaxedExtrasFollowGoods
+                && ! $line->isProduct()
+                && $line->netTotal > 0
+                && ($line->taxPercent === null || $line->taxPercent <= 0.0)
+                && $goodsRate !== null
+                && $scenario !== BuyerScenario::EU_B2B
+                && $scenario !== BuyerScenario::NON_EU;
+
             $item = [
                 'name' => mb_substr($name, 0, 255),
                 'quantity' => round($quantity, 3),
                 // Shipping and fees are services on the document even when their VAT follows the goods.
                 'units' => $line->isProduct() && ! $line->isService ? 'szt.' : 'usł.',
                 'unit_price' => round($line->netTotal / $quantity, 4),
-                'vat_type' => VatMapper::forLine($line, $scenario, $isService, $this->settings),
+                'vat_type' => $followsGoods
+                    ? VatMapper::domestic($goodsRate, $this->settings)
+                    : VatMapper::forLine($line, $scenario, $isService, $this->settings),
                 '_id' => $line->id,
                 '_net_total' => round($line->netTotal, 2),
                 '_gross_total' => round($line->grossTotal, 2),
