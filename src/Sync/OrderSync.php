@@ -204,6 +204,12 @@ final class OrderSync
         $viesStatus = $record->vies !== null && isset($record->vies['status']) ? (string) $record->vies['status'] : null;
         $built = (new OrderPayloadBuilder($this->config->toSettings()))->build($this->adapter->toCoreOrder($order), $viesStatus);
 
+        if ($built['blocker'] === Settings::BLOCKER_EU_CONSUMER_NO_VAT) {
+            $record->rememberError($this->module->l('Konsument z UE, a sklep nie naliczył VAT (brak reguły podatkowej dla tego kraju?). W trybie „stawki polskie" faktura wymaga VAT - popraw podatki w sklepie, przełącz tryb OSS albo zmień ustawienie „Konsument z UE bez VAT w sklepie".', 'ordersync'));
+
+            return null;
+        }
+
         if ($built['hasNegativeLines'] && $this->config->toSettings()->negativeLines === Settings::NEGATIVE_SKIP) {
             $record->rememberError($this->module->l('Zamówienie zawiera pozycję ujemną (rabat) - wystaw fakturę ręcznie albo włącz rozdzielanie rabatu w konfiguracji modułu.', 'ordersync'));
 
@@ -316,6 +322,17 @@ final class OrderSync
         $record->invoicePaid = !empty($invoice['paid_at']);
         $record->publicUrl = (string) (isset($invoice['public_url']) ? $invoice['public_url'] : '');
         $record->lastError = '';
+
+        // The mark-paid response carries a compact invoice; the public page URL lives on the full resource.
+        if ($record->publicUrl === '') {
+            try {
+                $full = $this->clientFor()->get(ApiPaths::invoice($record->invoiceId));
+                $record->publicUrl = (string) (isset($full['data']['public_url']) ? $full['data']['public_url'] : '');
+            } catch (ApiException $e) {
+                $this->logger->warning('Invoice details failed: ' . $e->getMessage());
+            }
+        }
+
         $record->save();
 
         $this->fetchPdf($record);

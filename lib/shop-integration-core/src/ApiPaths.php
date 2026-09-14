@@ -41,6 +41,11 @@ final class ApiPaths
         return 'orders/'.$correctingOrderId.'/issue-kor';
     }
 
+    public static function invoice(string $invoiceId): string
+    {
+        return 'invoices/'.$invoiceId;
+    }
+
     public static function invoicePdf(string $invoiceId): string
     {
         return 'invoices/'.$invoiceId.'/pdf';

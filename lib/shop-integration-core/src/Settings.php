@@ -32,8 +32,24 @@ final class Settings
 
     const REFUND_NOTE = 'note';
 
+    const EU_CONSUMER_NO_VAT_BLOCK = 'block';
+
+    const EU_CONSUMER_NO_VAT_MAP = 'map';
+
+    /** Blocker code: EU consumer order in "Polish rates" mode where the shop charged no VAT. */
+    const BLOCKER_EU_CONSUMER_NO_VAT = 'eu_consumer_no_vat';
+
     /** @var string net|gross */
     public $amountMode = self::AMOUNT_GROSS;
+
+    /**
+     * EU consumer (OSS mode "Polish rates") whose lines carry no VAT in the shop: `block` records an
+     * error instead of issuing a zw / 0% invoice that hides a tax misconfiguration; `map` applies
+     * the no-tax / zero-rate mappings like on domestic sales (VAT-exempt sellers).
+     *
+     * @var string block|map
+     */
+    public $euConsumerNoVat = self::EU_CONSUMER_NO_VAT_BLOCK;
 
     /** @var string BillTo vat_type for a 0% shop rate on domestic sales */
     public $vatTypeForZeroRate = '0 KR';

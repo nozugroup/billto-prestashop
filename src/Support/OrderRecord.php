@@ -105,6 +105,10 @@ final class OrderRecord
 
     public function save(): void
     {
+        // Explicit SQL NULL for the tri-state / optional columns. Db's null_values flag is not used: it
+        // would also turn empty strings into NULL while the text columns are NOT NULL.
+        $null = ['type' => 'sql', 'value' => 'NULL'];
+
         $data = [
             'id_order' => (int) $this->idOrder,
             'billto_order_id' => pSQL($this->billtoOrderId),
@@ -112,12 +116,12 @@ final class OrderRecord
             'line_map' => pSQL(json_encode($this->lineMap)),
             'invoice_id' => pSQL($this->invoiceId),
             'invoice_number' => pSQL($this->invoiceNumber),
-            'invoice_paid' => $this->invoicePaid === null ? null : (int) $this->invoicePaid,
+            'invoice_paid' => $this->invoicePaid === null ? $null : (int) $this->invoicePaid,
             'public_url' => pSQL($this->publicUrl),
             'pdf_path' => pSQL($this->pdfPath),
             'ksef_status' => pSQL($this->ksefStatus),
             'ksef_number' => pSQL($this->ksefNumber),
-            'vies' => $this->vies === null ? null : pSQL(json_encode($this->vies)),
+            'vies' => $this->vies === null ? $null : pSQL(json_encode($this->vies)),
             'last_error' => pSQL(mb_substr($this->lastError, 0, 1000)),
             'corrections' => pSQL(json_encode($this->corrections)),
             'scenario' => pSQL($this->scenario),
@@ -126,9 +130,9 @@ final class OrderRecord
 
         if (self::find($this->idOrder) === null) {
             $data['date_add'] = date('Y-m-d H:i:s');
-            Db::getInstance()->insert(self::TABLE, $data, true);
+            Db::getInstance()->insert(self::TABLE, $data);
         } else {
-            Db::getInstance()->update(self::TABLE, $data, 'id_order = ' . (int) $this->idOrder, 0, true);
+            Db::getInstance()->update(self::TABLE, $data, 'id_order = ' . (int) $this->idOrder);
         }
     }
 

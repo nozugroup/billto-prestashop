@@ -23,14 +23,18 @@ final class OrderPayloadBuilder
     }
 
     /**
+     * `blocker` is a Settings::BLOCKER_* code when the order must not be sent as is (the plugin
+     * records the matching message), null otherwise.
+     *
      * @param string|null $viesStatus Result of the VIES check for EU companies, or null
-     * @return array{payload: array<string, mixed>, lineMap: array<string, int>, hasNegativeLines: bool, scenario: string}
+     * @return array{payload: array<string, mixed>, lineMap: array<string, int>, hasNegativeLines: bool, scenario: string, blocker: string|null}
      */
     public function build(Order $order, ?string $viesStatus = null, bool $confirmed = true): array
     {
         $scenario = BuyerScenario::effective($order->buyer, $this->settings, $viesStatus);
         $lines = $this->lines($order, $scenario);
         $hasNegative = NegativeLines::hasNegative($lines);
+        $blocker = $this->blocker($order, $scenario);
 
         if ($hasNegative && $this->settings->negativeLines === Settings::NEGATIVE_DISTRIBUTE) {
             $lines = NegativeLines::distribute($lines, $this->settings->discountSuffix);
@@ -58,7 +62,29 @@ final class OrderPayloadBuilder
             'notes' => $this->notes($order),
         ];
 
-        return ['payload' => $payload, 'lineMap' => $lineMap, 'hasNegativeLines' => $hasNegative, 'scenario' => $scenario];
+        return ['payload' => $payload, 'lineMap' => $lineMap, 'hasNegativeLines' => $hasNegative, 'scenario' => $scenario, 'blocker' => $blocker];
+    }
+
+    /**
+     * An EU consumer invoiced with Polish rates must carry VAT; a line without VAT means the shop
+     * has no tax rule for that country (or a B2B-style 0% rule), which would silently produce a
+     * zw / 0 KR invoice. Sellers exempt from VAT switch the setting to `map`.
+     */
+    private function blocker(Order $order, string $scenario): ?string
+    {
+        if ($scenario !== BuyerScenario::EU_B2C
+            || $this->settings->ossMode !== Settings::OSS_PL_VAT
+            || $this->settings->euConsumerNoVat !== Settings::EU_CONSUMER_NO_VAT_BLOCK) {
+            return null;
+        }
+
+        foreach ($order->lines as $line) {
+            if ($line->netTotal > 0 && ($line->taxPercent === null || $line->taxPercent <= 0.0)) {
+                return Settings::BLOCKER_EU_CONSUMER_NO_VAT;
+            }
+        }
+
+        return null;
     }
 
     /**
