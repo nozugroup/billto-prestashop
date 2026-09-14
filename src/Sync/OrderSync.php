@@ -414,6 +414,32 @@ final class OrderSync
         $record->save();
     }
 
+    /**
+     * Public page URL of the invoice, fetched on demand: BillTo generates the public token lazily,
+     * so the URL may be missing right after issuance and appear on a later read.
+     */
+    public function ensurePublicUrl(OrderRecord $record): string
+    {
+        if ($record->publicUrl !== '' || $record->invoiceId === '') {
+            return $record->publicUrl;
+        }
+
+        try {
+            $full = $this->clientFor()->get(ApiPaths::invoice($record->invoiceId));
+        } catch (ApiException $e) {
+            return '';
+        }
+
+        $url = (string) (isset($full['data']['public_url']) ? $full['data']['public_url'] : '');
+
+        if ($url !== '') {
+            $record->publicUrl = $url;
+            $record->save();
+        }
+
+        return $url;
+    }
+
     public function fetchPdf(OrderRecord $record): ?string
     {
         if ($record->invoiceId === '') {

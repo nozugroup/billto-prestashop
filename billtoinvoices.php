@@ -142,6 +142,11 @@ class BilltoInvoices extends Module
         }
 
         $record = OrderRecord::find($idOrder);
+
+        if ($record !== null) {
+            $this->orderSync()->ensurePublicUrl($record);
+        }
+
         $link = $this->context->link->getAdminLink('AdminBilltoInvoices');
 
         $this->context->smarty->assign([
@@ -168,6 +173,8 @@ class BilltoInvoices extends Module
         if ($record === null || $record->invoiceId === '') {
             return '';
         }
+
+        $this->orderSync()->ensurePublicUrl($record);
 
         $this->context->smarty->assign([
             'billto_invoice_number' => $record->invoiceNumber,
