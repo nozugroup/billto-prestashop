@@ -85,13 +85,20 @@ final class OrderPayloadBuilder
             'notes' => $this->notes($order),
         ];
 
+        $warnings = array_values(array_unique($this->warnings));
+
+        if ($warnings !== []) {
+            // BillTo shows them on the order and in the integrations hub (API: integration_warnings).
+            $payload['integration_warnings'] = $warnings;
+        }
+
         return [
             'payload' => $payload,
             'lineMap' => $lineMap,
             'hasNegativeLines' => $hasNegative,
             'scenario' => $scenario,
             'blocker' => $blocker,
-            'warnings' => array_values(array_unique($this->warnings)),
+            'warnings' => $warnings,
         ];
     }
 

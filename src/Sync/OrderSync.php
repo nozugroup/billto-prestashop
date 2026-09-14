@@ -281,7 +281,8 @@ final class OrderSync
         }
 
         $record->billtoOrderId = (string) $data['id'];
-        $record->billtoOrderNumber = (string) (isset($data['order_number']) ? $data['order_number'] : '');
+        // display_number: BillTo series number, or the shop reference when the team does not number orders.
+        $record->billtoOrderNumber = (string) (isset($data['display_number']) ? $data['display_number'] : (isset($data['order_number']) ? $data['order_number'] : ''));
         $record->lineMap = $built['lineMap'];
         $record->scenario = $built['scenario'];
         $record->warnings = $built['warnings'];
