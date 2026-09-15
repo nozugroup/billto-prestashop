@@ -12,6 +12,20 @@ class Client
 {
     const TIMEOUT = 30;
 
+    /**
+     * Module version reported to the BillTo API. Kept in sync with $this->version in
+     * billtoinvoices.php - the API groups installations by this value, so a release that
+     * forgets to bump it is indistinguishable from the previous one.
+     */
+    const MODULE_VERSION = '0.1.0';
+
+    /**
+     * BillTo API version this release was tested against, sent as the `compat` segment of the
+     * User-Agent. Informational: it targets notifications about upcoming API changes and never
+     * selects API behaviour. Bump it when a release is verified against a newer API.
+     */
+    const API_COMPAT = '2026-09-15';
+
     /** @var string */
     private $token;
 
@@ -31,6 +45,28 @@ class Client
     public function isConfigured(): bool
     {
         return trim($this->token) !== '';
+    }
+
+    /**
+     * Identification required by the BillTo API.
+     *
+     * The module names ITSELF here, not PrestaShop: BillTo uses this header to reach the vendor
+     * of the software before a backwards-incompatible change, and `PrestaShop/1.7.8` identifies
+     * the runtime that many unrelated integrations share. The shop's platform version is
+     * appended as a diagnostic token - the API ignores it when matching, but it shortens
+     * support conversations.
+     *
+     * The contact must stay reachable: BillTo may suspend access when notifications bounce.
+     */
+    public static function userAgent(): string
+    {
+        return \BillTo\Shop\UserAgent::build(
+            'billto-prestashop',
+            self::MODULE_VERSION,
+            'https://billto.pl/integracje/prestashop',
+            self::API_COMPAT,
+            ['PrestaShop/' . (defined('_PS_VERSION_') ? _PS_VERSION_ : '?')]
+        );
     }
 
     /**
@@ -153,7 +189,7 @@ class Client
         $headers = [
             'Authorization: Bearer ' . $this->token,
             'Accept: ' . $accept,
-            'User-Agent: billto-prestashop/0.1.0 PrestaShop/' . (defined('_PS_VERSION_') ? _PS_VERSION_ : '?'),
+            'User-Agent: ' . self::userAgent(),
         ];
 
         if ($idempotencyKey !== null) {
