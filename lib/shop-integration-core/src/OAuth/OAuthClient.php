@@ -47,21 +47,32 @@ final class OAuthClient
     /**
      * Registers this installation using a one-time code the merchant generated in BillTo.
      *
-     * This is the default path, and the reason is worth stating: a software statement shipped
-     * inside a distributed plugin has to be treated as PUBLIC - the package is a zip anyone can
-     * download. It grants no access to data on its own, but it does let whoever holds it register
-     * a client bound to the vendor's identity, with a name and redirect of their choosing. The
-     * consent screen would then show a verified vendor's details next to an application that
-     * vendor never shipped.
+     * This is the default path. Two separate things travel here, and keeping them apart is the
+     * whole design:
      *
-     * A one-time code inverts that: it is issued by a signed-in BillTo user for a named
-     * application, is short-lived and single use, so nothing in the package grants anything.
+     * - The CODE is the merchant's permission: "one installation may create credentials on my
+     *   company". It is issued by a signed-in BillTo user behind a password check, lives for
+     *   minutes and works once, so nothing inside the distributed package grants anything.
+     * - The STATEMENT is the vendor's signed identity, and it is public by necessity - the
+     *   package is a zip anyone can download. On its own it registers nothing; it only decides
+     *   whether the consent screen shows this vendor's verified name or a warning that BillTo
+     *   does not know who wrote this software.
      *
      * @return array{client_id: string, client_secret: string}|null
      */
-    public function registerWithCode(string $registrationCode, string $clientName, string $redirectUri): ?array
-    {
-        return $this->registerWith(['registration_code' => $registrationCode], $clientName, $redirectUri);
+    public function registerWithCode(
+        string $registrationCode,
+        string $clientName,
+        string $redirectUri,
+        string $softwareStatement = ''
+    ): ?array {
+        $credential = ['registration_code' => $registrationCode];
+
+        if ($softwareStatement !== '') {
+            $credential['software_statement'] = $softwareStatement;
+        }
+
+        return $this->registerWith($credential, $clientName, $redirectUri);
     }
 
     /**

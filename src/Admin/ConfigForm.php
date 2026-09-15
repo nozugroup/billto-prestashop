@@ -31,6 +31,16 @@ final class ConfigForm
         $this->config = $config;
     }
 
+    /**
+     * Podpisana tożsamość tego modułu, wydana przez BillTo dostawcy (Ustawienia → Integracje →
+     * Aplikacje integratora → Oświadczenie). Wypełniana przy wydaniu paczki.
+     *
+     * Jest PUBLICZNA i tak ma być: paczkę pobiera każdy. Sama z siebie nie rejestruje niczego -
+     * bez kodu od sklepikarza BillTo ją odrzuci. Robi jedno: sprawia, że ekran zgody pokazuje
+     * zweryfikowaną nazwę dostawcy zamiast ostrzeżenia o nieznanym oprogramowaniu.
+     */
+    const SOFTWARE_STATEMENT = '';
+
     /** Zakresy, o które moduł prosi. Węziej się nie da - to minimum dla fakturowania zamówień. */
     const SCOPES = [
         'orders:read', 'orders:write',
@@ -92,7 +102,7 @@ final class ConfigForm
         $shopName = \Configuration::get('PS_SHOP_NAME');
         $installation = 'PrestaShop - ' . ($shopName !== false && $shopName !== '' ? $shopName : 'sklep');
 
-        if (!$connection->ensureRegistered($code, $redirectUri, (string) $installation)) {
+        if (!$connection->ensureRegistered($code, $redirectUri, (string) $installation, self::SOFTWARE_STATEMENT)) {
             return $this->module->displayError($this->module->l('BillTo odrzuciło rejestrację tej instalacji. Sprawdź adres serwisu i spróbuj ponownie.', 'configform'));
         }
 
