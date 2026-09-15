@@ -78,6 +78,9 @@ final class Config
             // Stan i weryfikator PKCE zyja tylko miedzy rozpoczeciem przeplywu a powrotem.
             'OAUTH_STATE' => '',
             'OAUTH_VERIFIER' => '',
+            // Adres powrotu do panelu, odkladany przy starcie przeplywu: kontroler frontowy
+            // przyjmujacy powrot nie ma sesji pracownika, wiec sam go nie zbuduje.
+            'OAUTH_RETURN' => '',
         ];
     }
 

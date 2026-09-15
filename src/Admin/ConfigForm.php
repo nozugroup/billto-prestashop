@@ -86,7 +86,10 @@ final class ConfigForm
         $redirectUri = $this->module->oauthRedirectUri();
         $connection = $this->module->oauthConnection();
 
-        $shopName = Configuration::get('PS_SHOP_NAME');
+        // Wiodący backslash jest konieczny: klasy PrestaShopa żyją w globalnej przestrzeni nazw,
+        // a ten plik nie - bez niego PHP szuka BillTo\PrestaShop\Admin\Configuration i wywala
+        // całą stronę konfiguracji dopiero w momencie kliknięcia „Połącz".
+        $shopName = \Configuration::get('PS_SHOP_NAME');
         $installation = 'PrestaShop - ' . ($shopName !== false && $shopName !== '' ? $shopName : 'sklep');
 
         if (!$connection->ensureRegistered($code, $redirectUri, (string) $installation)) {
@@ -100,6 +103,16 @@ final class ConfigForm
         // stan, a bez weryfikatora przechwycony kod jest bezużyteczny.
         $this->config->set('OAUTH_STATE', $state);
         $this->config->set('OAUTH_VERIFIER', $verifier);
+
+        // Adres powrotu do panelu odkładamy TUTAJ, bo tylko tutaj jest sesja pracownika, a bez
+        // jej tokenu nie da się zbudować działającego adresu kontrolera administracyjnego.
+        // Kontroler frontowy, który przyjmuje powrót z BillTo, takiej sesji nie ma.
+        $this->config->set('OAUTH_RETURN', \Context::getContext()->link->getAdminLink(
+            'AdminModules',
+            true,
+            [],
+            ['configure' => 'billtoinvoices']
+        ));
 
         $url = (new \BillTo\Shop\OAuth\OAuthClient($this->config->oauthBaseUrl(), new \BillTo\PrestaShop\Support\CurlPost()))
             ->authorizationUrl($connection->clientId(), $redirectUri, self::SCOPES, $state, $verifier);
@@ -208,11 +221,21 @@ final class ConfigForm
 
     private function statusPanel(): string
     {
-        $client = new Client($this->config->token(), $this->config->baseUrl(), new Logger());
+        // Ten sam klient co w synchronizacji (OAuth, a wklejony token jako droga zgodności) -
+        // inaczej panel diagnostyczny opisuje inne połączenie niż to, którym moduł wystawia faktury.
+        $client = $this->module->apiClient();
+        $connected = $this->module->oauthConnection()->isConnected();
         $rows = [];
 
+        $rows[] = [
+            $this->module->l('Poświadczenia', 'configform'),
+            $connected
+                ? '<span class="text-success">&#10003; ' . $this->module->l('połączenie OAuth', 'configform') . '</span>'
+                : $this->module->l('wklejony token API (droga zgodności)', 'configform'),
+        ];
+
         if (!$client->isConfigured()) {
-            $rows[] = [$this->module->l('Token API', 'configform'), '<span class="text-danger">' . $this->module->l('brak - wklej token poniżej', 'configform') . '</span>'];
+            $rows[] = [$this->module->l('Token API', 'configform'), '<span class="text-danger">' . $this->module->l('brak - połącz sklep z BillTo albo wklej token poniżej', 'configform') . '</span>'];
         } else {
             try {
                 $series = $client->get(ApiPaths::invoiceSeries(), ['type' => 'VAT']);
@@ -224,7 +247,9 @@ final class ConfigForm
                     }
                 }
 
-                $rows[] = [$this->module->l('Połączenie', 'configform'), '<span class="text-success">&#10003; ' . ($this->config->isSandbox() ? 'sandbox' : $this->module->l('produkcja', 'configform')) . '</span>'];
+                // Adres, a nie samo „produkcja": sklep wskazany na własny adres API pokazywał
+                // dotąd „produkcja", więc panel zapewniał o środowisku, z którym nie rozmawia.
+                $rows[] = [$this->module->l('Połączenie', 'configform'), '<span class="text-success">&#10003; ' . htmlspecialchars($this->config->baseUrl()) . '</span>'];
                 $rows[] = [$this->module->l('Domyślna seria VAT', 'configform'), $default !== null ? htmlspecialchars((string) $default) : '<span class="text-danger">' . $this->module->l('brak - ustaw w BillTo albo wybierz serię poniżej', 'configform') . '</span>'];
             } catch (ApiException $e) {
                 $rows[] = [$this->module->l('Połączenie', 'configform'), '<span class="text-danger">' . htmlspecialchars($e->getMessage()) . '</span>'];

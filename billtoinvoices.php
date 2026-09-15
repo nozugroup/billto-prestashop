@@ -221,6 +221,19 @@ class BilltoInvoices extends Module
         return $this->config;
     }
 
+    /**
+     * Klient API zbudowany tak samo jak w synchronizacji.
+     *
+     * Panel stanu MUSI uzywac tej samej drogi co reszta modulu. Budowal sobie wlasnego klienta
+     * z wklejonego tokenu, wiec po przejsciu sklepu na OAuth pokazywal blad uwierzytelnienia
+     * przy w pelni dzialajacym polaczeniu - czyli diagnostyka klamala dokladnie w chwili,
+     * w ktorej jest potrzebna.
+     */
+    public function apiClient(): Client
+    {
+        return call_user_func($this->clientFactory());
+    }
+
     /** @return callable(): Client */
     private function clientFactory(): callable
     {

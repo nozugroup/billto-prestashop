@@ -50,15 +50,30 @@ class BilltoInvoicesOauthModuleFrontController extends ModuleFrontController
     }
 
     /**
-     * Wraca do konfiguracji modułu z wynikiem. Adres budujemy przez Link, bo kontroler
-     * administracyjny wymaga aktualnego tokenu sesji.
+     * Wraca do konfiguracji modułu z wynikiem.
+     *
+     * Adres powrotny odkłada ConfigForm przy starcie przepływu i tylko tak może być poprawny:
+     * kontroler administracyjny wymaga tokenu sesji PRACOWNIKA, a ten kontroler jest frontowy
+     * i żadnej sesji admina nie ma. Budowany tutaj `getAdminLink()` dawał adres bez tokenu
+     * i bez `index.php`, czyli powrót kończył się stroną 404 mimo poprawnie zapisanych tokenów.
      */
     private function finish(string $result)
     {
-        $url = $this->context->link->getAdminLink('AdminModules', true)
-            . '&configure=billtoinvoices&billto_oauth=' . urlencode($result);
+        $config = $this->module->config();
 
-        Tools::redirectAdmin($url);
+        $return = (string) $config->get('OAUTH_RETURN');
+        $config->set('OAUTH_RETURN', '');
+
+        if ($return === '') {
+            // Bez odłożonego adresu zostaje strona sklepu - lepsze niż adres, który na pewno
+            // jest błędny. Sklepikarz wraca do panelu sam i zobaczy tam stan połączenia.
+            $return = $this->context->link->getPageLink('index', true);
+        }
+
+        $url = $return . (strpos($return, '?') === false ? '?' : '&')
+            . 'billto_oauth=' . urlencode($result);
+
+        Tools::redirect($url);
         exit;
     }
 }
