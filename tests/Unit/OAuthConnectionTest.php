@@ -53,16 +53,20 @@ it('rejestruje instalację tylko raz', function () {
 
     $connection = psConnection($http);
 
-    expect($connection->ensureRegistered('statement', 'https://sklep.test/cb', 'PrestaShop - sklep'))->toBeTrue()
+    expect($connection->ensureRegistered('3b8cacc7-eeec', 'blti_KOD', 'https://sklep.test/cb', 'PrestaShop sklep'))->toBeTrue()
         ->and($connection->clientId())->toBe('cid')
-        ->and($connection->ensureRegistered('statement', 'https://sklep.test/cb', 'PrestaShop - sklep'))->toBeTrue()
-        ->and($http->calls)->toHaveCount(1);
+        ->and($connection->ensureRegistered('3b8cacc7-eeec', 'blti_KOD', 'https://sklep.test/cb', 'PrestaShop sklep'))->toBeTrue()
+        ->and($http->calls)->toHaveCount(1)
+        // Identyfikator mówi KTO, kod mówi NA CZYJE dane. Żadne z osobna nie wystarcza.
+        ->and($http->calls[0]['fields']['software_statement_id'])->toBe('3b8cacc7-eeec')
+        ->and($http->calls[0]['fields']['code'])->toBe('blti_KOD');
 });
 
 it('nie zapisuje poświadczeń, gdy BillTo odrzuci rejestrację', function () {
-    $connection = psConnection(new QueuedPost([['status' => 401, 'body' => '{"error":"invalid_software_statement"}']]));
+    // 403 = zły, zużyty albo wygasły kod - albo dostawca, któremu nie nadano DCR.
+    $connection = psConnection(new QueuedPost([['status' => 403, 'body' => '{"error":"invalid_code"}']]));
 
-    expect($connection->ensureRegistered('zle', 'https://sklep.test/cb', 'PrestaShop'))->toBeFalse()
+    expect($connection->ensureRegistered('3b8cacc7-eeec', 'zle', 'https://sklep.test/cb', 'PrestaShop'))->toBeFalse()
         ->and($connection->clientId())->toBe('');
 });
 

@@ -76,16 +76,16 @@ final class OAuthConnection
      * Idempotentne: ponowne wywołanie nie tworzy drugiego klienta. Gdyby tworzyło, każde
      * kliknięcie „Połącz" zostawiałoby w rejestrze BillTo osierocony wpis.
      */
-    public function ensureRegistered(string $registrationCode, string $redirectUri, string $installationName, string $softwareStatement = ''): bool
+    public function ensureRegistered(string $softwareStatementId, string $registrationCode, string $redirectUri, string $installationName): bool
     {
         if ($this->clientId() !== '' && $this->clientSecret() !== '') {
             return true;
         }
 
-        // Kod to zgoda sklepikarza, oświadczenie - podpisana tożsamość modułu. Oświadczenie samo
-        // niczego nie rejestruje (paczka jest publiczna), decyduje wyłącznie o tym, czy na ekranie
-        // zgody stanie zweryfikowana nazwa dostawcy, czy ostrzeżenie o nieznanym oprogramowaniu.
-        $credentials = $this->oauth->registerWithCode($registrationCode, $installationName, $redirectUri, $softwareStatement);
+        // Identyfikator mówi, KTO się rejestruje (wydany dostawcy przez BillTo, jedzie w paczce
+        // i nie jest sekretem). Kod mówi, NA CZYJE dane (generuje go sklepikarz, żyje 2 minuty).
+        // Żadne z osobna nie wystarcza.
+        $credentials = $this->oauth->register($softwareStatementId, $registrationCode, $installationName, $redirectUri);
 
         if ($credentials === null) {
             $this->logger->error('[BillTo OAuth] rejestracja instalacji odrzucona przez BillTo');

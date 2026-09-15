@@ -31,60 +31,38 @@ final class OAuthClient
     }
 
     /**
-     * Registers this installation as an OAuth client (RFC 7591).
+     * Registers this installation as an OAuth client (RFC 7591) - the LAST-RESORT path.
      *
-     * The software statement is issued to the VENDOR and embedded in the distributed code; it
-     * is what lets BillTo trace every installation back to one responsible party. It is not a
-     * secret granting access on its own - it only authorises creating credentials.
+     * Most integrations never touch this. They are registered once in BillTo, get one
+     * client_id/secret and run the ordinary Authorization Code flow. Dynamic registration is for
+     * software that genuinely needs its OWN credentials in every installation, and BillTo hands
+     * out the software statement id only to vendors who asked for it and explained why.
+     *
+     * Two things travel here and neither works without the other:
+     *
+     * - `software_statement_id` says WHO is registering. It is issued by BillTo to the vendor and
+     *   shipped in the package. It is not a secret and does not need to be: on its own it opens
+     *   nothing, because registration without a merchant's code is refused.
+     * - `code` says WHOSE data. The merchant generates it in BillTo behind a password check; it
+     *   lives two minutes and works once.
+     *
+     * `clientName` must be unique across BillTo and cannot be changed later - build it from
+     * something durable (the customer's domain, an installation id, a date).
      *
      * @return array{client_id: string, client_secret: string}|null null when registration was refused
      */
-    public function register(string $softwareStatement, string $clientName, string $redirectUri): ?array
-    {
-        return $this->registerWith(['software_statement' => $softwareStatement], $clientName, $redirectUri);
-    }
-
-    /**
-     * Registers this installation using a one-time code the merchant generated in BillTo.
-     *
-     * This is the default path. Two separate things travel here, and keeping them apart is the
-     * whole design:
-     *
-     * - The CODE is the merchant's permission: "one installation may create credentials on my
-     *   company". It is issued by a signed-in BillTo user behind a password check, lives for
-     *   minutes and works once, so nothing inside the distributed package grants anything.
-     * - The STATEMENT is the vendor's signed identity, and it is public by necessity - the
-     *   package is a zip anyone can download. On its own it registers nothing; it only decides
-     *   whether the consent screen shows this vendor's verified name or a warning that BillTo
-     *   does not know who wrote this software.
-     *
-     * @return array{client_id: string, client_secret: string}|null
-     */
-    public function registerWithCode(
-        string $registrationCode,
+    public function register(
+        string $softwareStatementId,
+        string $code,
         string $clientName,
-        string $redirectUri,
-        string $softwareStatement = ''
+        string $redirectUri
     ): ?array {
-        $credential = ['registration_code' => $registrationCode];
-
-        if ($softwareStatement !== '') {
-            $credential['software_statement'] = $softwareStatement;
-        }
-
-        return $this->registerWith($credential, $clientName, $redirectUri);
-    }
-
-    /**
-     * @param  array<string, string>  $credential
-     * @return array{client_id: string, client_secret: string}|null
-     */
-    private function registerWith(array $credential, string $clientName, string $redirectUri): ?array
-    {
-        $response = $this->http->post($this->baseUrl.'/oauth/register', array_merge($credential, [
+        $response = $this->http->post($this->baseUrl.'/oauth/register', [
+            'software_statement_id' => $softwareStatementId,
+            'code' => $code,
             'client_name' => $clientName,
             'redirect_uris[0]' => $redirectUri,
-        ]), ['Accept' => 'application/json']);
+        ], ['Accept' => 'application/json']);
 
         if ($response === null || $response['status'] !== 201) {
             return null;

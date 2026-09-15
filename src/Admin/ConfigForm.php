@@ -32,14 +32,14 @@ final class ConfigForm
     }
 
     /**
-     * Podpisana tożsamość tego modułu, wydana przez BillTo dostawcy (Ustawienia → Integracje →
-     * Aplikacje integratora → Oświadczenie). Wypełniana przy wydaniu paczki.
+     * Software statement ID tego modułu - identyfikator wydany dostawcy przez BillTo po
+     * uzasadnionej prośbie o DCR. Wypełniany przy wydaniu paczki.
      *
-     * Jest PUBLICZNA i tak ma być: paczkę pobiera każdy. Sama z siebie nie rejestruje niczego -
-     * bez kodu od sklepikarza BillTo ją odrzuci. Robi jedno: sprawia, że ekran zgody pokazuje
-     * zweryfikowaną nazwę dostawcy zamiast ostrzeżenia o nieznanym oprogramowaniu.
+     * Jest JAWNY i tak ma być: paczkę pobiera każdy. Sam z siebie nie rejestruje niczego - bez
+     * dwuminutowego kodu od sklepikarza BillTo odrzuci żądanie, a bez identyfikatora nie wiadomo,
+     * kto się rejestruje.
      */
-    const SOFTWARE_STATEMENT = '';
+    const SOFTWARE_STATEMENT_ID = '';
 
     /** Zakresy, o które moduł prosi. Węziej się nie da - to minimum dla fakturowania zamówień. */
     const SCOPES = [
@@ -100,9 +100,12 @@ final class ConfigForm
         // a ten plik nie - bez niego PHP szuka BillTo\PrestaShop\Admin\Configuration i wywala
         // całą stronę konfiguracji dopiero w momencie kliknięcia „Połącz".
         $shopName = \Configuration::get('PS_SHOP_NAME');
-        $installation = 'PrestaShop - ' . ($shopName !== false && $shopName !== '' ? $shopName : 'sklep');
+        // Nazwa instalacji jest UNIKATOWA w skali BillTo i niezmienna po rejestracji - stąd
+        // nazwa sklepu + data. Bez daty ponowne podłączenie tego samego sklepu po odłączeniu
+        // poległoby na duplikacie nazwy (422). Limit 50 znaków jest po stronie BillTo.
+        $installation = substr('PrestaShop ' . ($shopName !== false && $shopName !== '' ? $shopName : 'sklep') . ' ' . gmdate('Y-m-d H:i'), 0, 50);
 
-        if (!$connection->ensureRegistered($code, $redirectUri, (string) $installation, self::SOFTWARE_STATEMENT)) {
+        if (!$connection->ensureRegistered(self::SOFTWARE_STATEMENT_ID, $code, $redirectUri, (string) $installation)) {
             return $this->module->displayError($this->module->l('BillTo odrzuciło rejestrację tej instalacji. Sprawdź adres serwisu i spróbuj ponownie.', 'configform'));
         }
 
