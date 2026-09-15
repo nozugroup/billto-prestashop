@@ -76,13 +76,13 @@ final class OAuthConnection
      * Idempotentne: ponowne wywołanie nie tworzy drugiego klienta. Gdyby tworzyło, każde
      * kliknięcie „Połącz" zostawiałoby w rejestrze BillTo osierocony wpis.
      */
-    public function ensureRegistered(string $softwareStatement, string $redirectUri, string $installationName): bool
+    public function ensureRegistered(string $registrationCode, string $redirectUri, string $installationName): bool
     {
         if ($this->clientId() !== '' && $this->clientSecret() !== '') {
             return true;
         }
 
-        $credentials = $this->oauth->register($softwareStatement, $installationName, $redirectUri);
+        $credentials = $this->oauth->registerWithCode($registrationCode, $installationName, $redirectUri);
 
         if ($credentials === null) {
             $this->logger->error('[BillTo OAuth] rejestracja instalacji odrzucona przez BillTo');

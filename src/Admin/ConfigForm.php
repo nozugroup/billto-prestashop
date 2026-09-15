@@ -74,10 +74,13 @@ final class ConfigForm
      */
     private function startOAuth(): string
     {
-        $statement = (string) \BilltoInvoices::SOFTWARE_STATEMENT;
+        // KOD INSTALACYJNY, a nie wartość osadzona w paczce modułu - patrz nagłówek
+        // src/Api/OAuthConnection.php. Kod wkleja sklepikarz, więc archiwum modułu nie niesie
+        // niczego, co pozwalałoby cokolwiek zarejestrować.
+        $code = trim((string) Tools::getValue('billto_registration_code'));
 
-        if ($statement === '') {
-            return $this->module->displayError($this->module->l('Wydanie tej wersji modułu nie zawiera oświadczenia o oprogramowaniu - połączenie OAuth jest niedostępne.', 'configform'));
+        if ($code === '' && $this->module->oauthConnection()->clientId() === '') {
+            return $this->module->displayError($this->module->l('Wklej kod instalacyjny wygenerowany w BillTo (Ustawienia → Integracje → Autoryzowane aplikacje).', 'configform'));
         }
 
         $redirectUri = $this->module->oauthRedirectUri();
@@ -86,7 +89,7 @@ final class ConfigForm
         $shopName = Configuration::get('PS_SHOP_NAME');
         $installation = 'PrestaShop - ' . ($shopName !== false && $shopName !== '' ? $shopName : 'sklep');
 
-        if (!$connection->ensureRegistered($statement, $redirectUri, (string) $installation)) {
+        if (!$connection->ensureRegistered($code, $redirectUri, (string) $installation)) {
             return $this->module->displayError($this->module->l('BillTo odrzuciło rejestrację tej instalacji. Sprawdź adres serwisu i spróbuj ponownie.', 'configform'));
         }
 
@@ -148,8 +151,10 @@ final class ConfigForm
         }
 
         return '<div class="panel"><h3>' . $l('Połączenie z BillTo') . '</h3>'
-            . '<p>' . $l('Połącz sklep z BillTo - firmę i zakres uprawnień wskażesz w BillTo, bez przenoszenia tokenu do sklepu.') . '</p>'
-            . '<form method="post"><button type="submit" name="billtoOauthConnect" class="btn btn-primary">'
+            . '<p>' . $l('Wygeneruj kod instalacyjny w BillTo (Ustawienia → Integracje → Autoryzowane aplikacje), wklej go poniżej i podłącz sklep. Firmę i zakres uprawnień wskażesz w BillTo - token nie jest przenoszony do sklepu.') . '</p>'
+            . '<form method="post">'
+            . '<input type="text" name="billto_registration_code" placeholder="blti_..." autocomplete="off" style="min-width:320px;margin-right:8px">'
+            . '<button type="submit" name="billtoOauthConnect" class="btn btn-primary">'
             . $l('Połącz z BillTo') . '</button></form></div>';
     }
 

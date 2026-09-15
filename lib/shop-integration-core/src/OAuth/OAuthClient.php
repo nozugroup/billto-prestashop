@@ -41,11 +41,39 @@ final class OAuthClient
      */
     public function register(string $softwareStatement, string $clientName, string $redirectUri): ?array
     {
-        $response = $this->http->post($this->baseUrl.'/oauth/register', [
-            'software_statement' => $softwareStatement,
+        return $this->registerWith(['software_statement' => $softwareStatement], $clientName, $redirectUri);
+    }
+
+    /**
+     * Registers this installation using a one-time code the merchant generated in BillTo.
+     *
+     * This is the default path, and the reason is worth stating: a software statement shipped
+     * inside a distributed plugin has to be treated as PUBLIC - the package is a zip anyone can
+     * download. It grants no access to data on its own, but it does let whoever holds it register
+     * a client bound to the vendor's identity, with a name and redirect of their choosing. The
+     * consent screen would then show a verified vendor's details next to an application that
+     * vendor never shipped.
+     *
+     * A one-time code inverts that: it is issued by a signed-in BillTo user for a named
+     * application, is short-lived and single use, so nothing in the package grants anything.
+     *
+     * @return array{client_id: string, client_secret: string}|null
+     */
+    public function registerWithCode(string $registrationCode, string $clientName, string $redirectUri): ?array
+    {
+        return $this->registerWith(['registration_code' => $registrationCode], $clientName, $redirectUri);
+    }
+
+    /**
+     * @param  array<string, string>  $credential
+     * @return array{client_id: string, client_secret: string}|null
+     */
+    private function registerWith(array $credential, string $clientName, string $redirectUri): ?array
+    {
+        $response = $this->http->post($this->baseUrl.'/oauth/register', array_merge($credential, [
             'client_name' => $clientName,
             'redirect_uris[0]' => $redirectUri,
-        ], ['Accept' => 'application/json']);
+        ]), ['Accept' => 'application/json']);
 
         if ($response === null || $response['status'] !== 201) {
             return null;

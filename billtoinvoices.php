@@ -30,14 +30,6 @@ use BillTo\PrestaShop\Admin\ConfigForm;
 
 class BilltoInvoices extends Module
 {
-    /**
-     * Oswiadczenie o oprogramowaniu wydane dostawcy przez BillTo i osadzone w wydaniu modulu.
-     *
-     * Nie jest sekretem dajacym dostep - uprawnia wylacznie do ZALOZENIA poswiadczen, a kazda
-     * instalacja dostaje wlasne. Puste w repozytorium: wartosc wchodzi przy budowaniu paczki.
-     */
-    const SOFTWARE_STATEMENT = '';
-
     /** @var Config */
     private $config;
 
