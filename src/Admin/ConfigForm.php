@@ -31,6 +31,14 @@ final class ConfigForm
         $this->config = $config;
     }
 
+    /** Zakresy, o które moduł prosi. Węziej się nie da - to minimum dla fakturowania zamówień. */
+    const SCOPES = [
+        'orders:read', 'orders:write',
+        'invoices:read', 'invoices:write',
+        'contractors:read', 'contractors:write',
+        'products:read',
+    ];
+
     public function render(): string
     {
         $output = '';
@@ -44,7 +52,105 @@ final class ConfigForm
             $output .= $this->module->displayConfirmation(sprintf($this->module->l('Przetworzono zadań: %d', 'configform'), $processed));
         }
 
-        return $output . $this->statusPanel() . $this->form();
+        if (Tools::isSubmit('billtoOauthConnect')) {
+            $output .= $this->startOAuth();
+        }
+
+        if (Tools::isSubmit('billtoOauthDisconnect')) {
+            $this->module->oauthConnection()->disconnect();
+            $output .= $this->module->displayConfirmation($this->module->l('Odłączono sklep od BillTo.', 'configform'));
+        }
+
+        $output .= $this->oauthResultNotice();
+
+        return $output . $this->oauthPanel() . $this->statusPanel() . $this->form();
+    }
+
+
+    /**
+     * Rozpoczyna przepływ Authorization Code z PKCE, poprzedzony rejestracją tej instalacji (DCR).
+     *
+     * Wybór przepływu i uzasadnienie - patrz nagłówek kontrolera `controllers/front/oauth.php`.
+     */
+    private function startOAuth(): string
+    {
+        $statement = (string) \BilltoInvoices::SOFTWARE_STATEMENT;
+
+        if ($statement === '') {
+            return $this->module->displayError($this->module->l('Wydanie tej wersji modułu nie zawiera oświadczenia o oprogramowaniu - połączenie OAuth jest niedostępne.', 'configform'));
+        }
+
+        $redirectUri = $this->module->oauthRedirectUri();
+        $connection = $this->module->oauthConnection();
+
+        $shopName = Configuration::get('PS_SHOP_NAME');
+        $installation = 'PrestaShop - ' . ($shopName !== false && $shopName !== '' ? $shopName : 'sklep');
+
+        if (!$connection->ensureRegistered($statement, $redirectUri, (string) $installation)) {
+            return $this->module->displayError($this->module->l('BillTo odrzuciło rejestrację tej instalacji. Sprawdź adres serwisu i spróbuj ponownie.', 'configform'));
+        }
+
+        $verifier = \BillTo\Shop\OAuth\Pkce::verifier();
+        $state = \BillTo\Shop\OAuth\Pkce::state();
+
+        // Weryfikator i stan zostają PO STRONIE SERWERA - w adresie powrotnym jedzie wyłącznie
+        // stan, a bez weryfikatora przechwycony kod jest bezużyteczny.
+        $this->config->set('OAUTH_STATE', $state);
+        $this->config->set('OAUTH_VERIFIER', $verifier);
+
+        $url = (new \BillTo\Shop\OAuth\OAuthClient($this->config->oauthBaseUrl(), new \BillTo\PrestaShop\Support\CurlPost()))
+            ->authorizationUrl($connection->clientId(), $redirectUri, self::SCOPES, $state, $verifier);
+
+        Tools::redirect($url);
+
+        return '';
+    }
+
+    /** Komunikat po powrocie z BillTo - kontroler frontowy przekazuje wynik parametrem. */
+    private function oauthResultNotice(): string
+    {
+        $result = (string) Tools::getValue('billto_oauth');
+
+        if ($result === '') {
+            return '';
+        }
+
+        if ($result === 'connected') {
+            return $this->module->displayConfirmation($this->module->l('Sklep połączony z BillTo.', 'configform'));
+        }
+
+        $messages = [
+            'denied' => $this->module->l('Autoryzacja została przerwana - sklep nie został połączony.', 'configform'),
+            'state_mismatch' => $this->module->l('Powrót z BillTo nie pasuje do rozpoczętego żądania. Rozpocznij łączenie od nowa.', 'configform'),
+            'exchange_failed' => $this->module->l('Nie udało się wymienić kodu autoryzacyjnego. Spróbuj ponownie.', 'configform'),
+        ];
+
+        return $this->module->displayError(isset($messages[$result]) ? $messages[$result] : $this->module->l('Połączenie z BillTo nie powiodło się.', 'configform'));
+    }
+
+    /** Panel stanu połączenia z przyciskiem połącz / odłącz. */
+    private function oauthPanel(): string
+    {
+        $connection = $this->module->oauthConnection();
+        $l = function (string $text) {
+            return $this->module->l($text, 'configform');
+        };
+
+        if ($connection->isConnected()) {
+            $company = $connection->companyName();
+
+            return '<div class="panel"><h3>' . $l('Połączenie z BillTo') . '</h3>'
+                . '<p><strong>' . $l('Sklep jest połączony.') . '</strong>'
+                . ($company !== '' ? ' ' . htmlspecialchars($l('Firma:') . ' ' . $company, ENT_QUOTES, 'UTF-8') : '')
+                . '</p>'
+                . '<form method="post"><button type="submit" name="billtoOauthDisconnect" class="btn btn-default">'
+                . $l('Odłącz') . '</button></form></div>';
+        }
+
+        return '<div class="panel"><h3>' . $l('Połączenie z BillTo') . '</h3>'
+            . '<p>' . $l('Połącz sklep z BillTo - firmę i zakres uprawnień wskażesz w BillTo, bez przenoszenia tokenu do sklepu.') . '</p>'
+            . '<form method="post"><button type="submit" name="billtoOauthConnect" class="btn btn-primary">'
+            . $l('Połącz z BillTo') . '</button></form></div>';
     }
 
     private function save(): string

@@ -15,6 +15,9 @@ require_once __DIR__ . '/autoload.php';
 
 use BillTo\PrestaShop\Api\Client;
 use BillTo\PrestaShop\Install\Installer;
+use BillTo\PrestaShop\Api\OAuthConnection;
+use BillTo\PrestaShop\Support\CurlPost;
+use BillTo\Shop\OAuth\OAuthClient;
 use BillTo\PrestaShop\Support\Config;
 use BillTo\PrestaShop\Support\Logger;
 use BillTo\PrestaShop\Support\OrderRecord;
@@ -27,6 +30,14 @@ use BillTo\PrestaShop\Admin\ConfigForm;
 
 class BilltoInvoices extends Module
 {
+    /**
+     * Oswiadczenie o oprogramowaniu wydane dostawcy przez BillTo i osadzone w wydaniu modulu.
+     *
+     * Nie jest sekretem dajacym dostep - uprawnia wylacznie do ZALOZENIA poswiadczen, a kazda
+     * instalacja dostaje wlasne. Puste w repozytorium: wartosc wchodzi przy budowaniu paczki.
+     */
+    const SOFTWARE_STATEMENT = '';
+
     /** @var Config */
     private $config;
 
@@ -205,6 +216,9 @@ class BilltoInvoices extends Module
         return $this->refundSync;
     }
 
+    /** @var OAuthConnection|null */
+    private $oauthConnection = null;
+
     public function queue(): Queue
     {
         return new Queue($this->config, $this->orderSync(), $this->refundSync(), new Logger());
@@ -219,10 +233,41 @@ class BilltoInvoices extends Module
     private function clientFactory(): callable
     {
         $config = $this->config;
+        $module = $this;
 
-        return static function () use ($config) {
-            return new Client($config->token(), $config->baseUrl(), new Logger());
+        return static function () use ($config, $module) {
+            // OAuth ma PIERWSZENSTWO, ale wklejony token zostaje jako droga zgodnosci: sklepy
+            // podlaczone przed przejsciem na OAuth maja go w konfiguracji, a wylaczenie tej
+            // sciezki zatrzymaloby im wystawianie faktur w dniu aktualizacji modulu.
+            $token = $module->oauthConnection()->accessToken();
+
+            return new Client($token !== null ? $token : $config->token(), $config->baseUrl(), new Logger());
         };
+    }
+
+    /** Stan polaczenia OAuth tego sklepu - budowany leniwie, jak klient API. */
+    public function oauthConnection(): OAuthConnection
+    {
+        if ($this->oauthConnection === null) {
+            $this->oauthConnection = new OAuthConnection(
+                $this->config,
+                new Logger(),
+                new OAuthClient($this->config->oauthBaseUrl(), new CurlPost())
+            );
+        }
+
+        return $this->oauthConnection;
+    }
+
+    /**
+     * Adres powrotny przeplywu autoryzacji - STALY przez caly czas zycia instalacji.
+     *
+     * BillTo porownuje go przy wymianie kodu, wiec kazda zmiana adresu sklepu wymaga ponownej
+     * rejestracji instalacji. Kontroler frontowy, bo adresy admina niosa token sesji.
+     */
+    public function oauthRedirectUri(): string
+    {
+        return $this->context->link->getModuleLink('billtoinvoices', 'oauth', [], true);
     }
 
     /**

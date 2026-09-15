@@ -66,6 +66,18 @@ final class Config
             'SYNC_MODE' => self::SYNC_IMMEDIATE,
             'CRON_TOKEN' => '',
             'RESYNC_ON_EDIT' => 1,
+            // Polaczenie OAuth: wlasne poswiadczenia instalacji + para tokenow.
+            // Puste wartosci znacza "sklep niepolaczony" - modul dziala wtedy na
+            // wklejonym tokenie (droga zgodnosci).
+            'OAUTH_CLIENT_ID' => '',
+            'OAUTH_CLIENT_SECRET' => '',
+            'OAUTH_ACCESS_TOKEN' => '',
+            'OAUTH_REFRESH_TOKEN' => '',
+            'OAUTH_EXPIRES_AT' => '0',
+            'OAUTH_COMPANY' => '',
+            // Stan i weryfikator PKCE zyja tylko miedzy rozpoczeciem przeplywu a powrotem.
+            'OAUTH_STATE' => '',
+            'OAUTH_VERIFIER' => '',
         ];
     }
 
@@ -89,6 +101,20 @@ final class Config
                 Configuration::updateValue(self::PREFIX . $key, $key === 'CRON_TOKEN' ? bin2hex(random_bytes(16)) : $value);
             }
         }
+    }
+
+    /**
+     * Korzen serwisu BillTo, bez prefiksu API.
+     *
+     * Endpointy OAuth (`/oauth/authorize`, `/oauth/token`, `/oauth/register`) stoja w korzeniu,
+     * nie pod `/api/v1` - to przeplyw dla przegladarki, nie zasob API.
+     */
+    public function oauthBaseUrl(): string
+    {
+        $base = $this->baseUrl();
+        $position = strpos($base, '/api/');
+
+        return $position === false ? rtrim($base, '/') : rtrim(substr($base, 0, $position), '/');
     }
 
     public function token(): string
