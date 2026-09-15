@@ -3,6 +3,7 @@
 namespace BillTo\PrestaShop\Api;
 
 use BillTo\PrestaShop\Support\Logger;
+use BillTo\PrestaShop\Support\Version;
 
 /**
  * Thin BillTo API v1 client on curl: Bearer auth, Idempotency-Key on every mutation, one retry
@@ -153,7 +154,9 @@ class Client
         $headers = [
             'Authorization: Bearer ' . $this->token,
             'Accept: ' . $accept,
-            'User-Agent: billto-prestashop/0.1.0 PrestaShop/' . (defined('_PS_VERSION_') ? _PS_VERSION_ : '?'),
+            // The name must match the module's technical id (directory, ZIP, slug on the BillTo
+            // side): BillTo recognises installations by it and compares the reported version.
+            'User-Agent: billtoinvoices/' . Version::MODULE . ' PrestaShop/' . (defined('_PS_VERSION_') ? _PS_VERSION_ : '?'),
         ];
 
         if ($idempotencyKey !== null) {

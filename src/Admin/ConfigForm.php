@@ -6,6 +6,7 @@ use BillTo\PrestaShop\Api\ApiException;
 use BillTo\PrestaShop\Api\Client;
 use BillTo\PrestaShop\Support\Config;
 use BillTo\PrestaShop\Support\Logger;
+use BillTo\PrestaShop\Support\UpdateChecker;
 use BillTo\PrestaShop\Sync\Queue;
 use BillTo\Shop\ApiPaths;
 use BillTo\Shop\Settings;
@@ -44,7 +45,7 @@ final class ConfigForm
             $output .= $this->module->displayConfirmation(sprintf($this->module->l('Przetworzono zadań: %d', 'configform'), $processed));
         }
 
-        return $output . $this->statusPanel() . $this->form();
+        return $output . $this->updateNotice() . $this->statusPanel() . $this->form();
     }
 
     private function save(): string
@@ -95,6 +96,38 @@ final class ConfigForm
         return $this->module->displayConfirmation($this->module->l('Ustawienia zapisane.', 'configform'));
     }
 
+    /**
+     * A newer module version - this page is the only place PrestaShop lets us mention it. A module
+     * installed outside Addons never shows up in the shop's update list, and installing it is a
+     * manual ZIP upload anyway, so the notice links straight to the download and the changelog.
+     */
+    private function updateNotice(): string
+    {
+        $update = (new UpdateChecker())->availableUpdate($this->module->version);
+
+        if ($update === null) {
+            return '';
+        }
+
+        $message = sprintf(
+            $this->module->l('Dostępna jest nowsza wersja modułu: %s (zainstalowana: %s).', 'configform'),
+            htmlspecialchars((string) $update['version']),
+            htmlspecialchars((string) $this->module->version)
+        );
+
+        $links = '<a class="btn btn-default" href="' . htmlspecialchars((string) $update['download_url']) . '"><i class="icon-download"></i> '
+            . $this->module->l('Pobierz ZIP', 'configform') . '</a>';
+
+        if (!empty($update['changelog_url'])) {
+            $links .= ' <a href="' . htmlspecialchars((string) $update['changelog_url']) . '" target="_blank" rel="noopener">'
+                . $this->module->l('Lista zmian', 'configform') . '</a>';
+        }
+
+        return '<div class="alert alert-info"><p>' . $message . ' '
+            . $this->module->l('Aktualizację wgrywasz w Moduły -> Wgraj moduł; ustawienia i powiązania zamówień zostają.', 'configform')
+            . '</p><p>' . $links . '</p></div>';
+    }
+
     private function statusPanel(): string
     {
         $client = new Client($this->config->token(), $this->config->baseUrl(), new Logger());
@@ -119,6 +152,8 @@ final class ConfigForm
                 $rows[] = [$this->module->l('Połączenie', 'configform'), '<span class="text-danger">' . htmlspecialchars($e->getMessage()) . '</span>'];
             }
         }
+
+        $rows[] = [$this->module->l('Wersja modułu', 'configform'), htmlspecialchars((string) $this->module->version)];
 
         $stats = Queue::stats();
         $rows[] = [$this->module->l('Zadania w tle', 'configform'), sprintf('%d %s, %s %s', $stats['pending'], $this->module->l('oczekujących', 'configform'), $stats['failed'] > 0 ? '<span class="text-danger">' . $stats['failed'] . '</span>' : '0', $this->module->l('nieudanych w 7 dni', 'configform'))];

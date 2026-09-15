@@ -1,5 +1,17 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- Update notice on the configuration page: the module asks BillTo for the latest published release and
+  links to the ZIP and the changelog. PrestaShop never lists modules installed outside Addons as
+  updatable, so this page was the only place it could be shown.
+- `upgrade/` scripts backed by an idempotent `Installer::syncSchema()`. Without them a module update ran
+  no schema change at all, because PrestaShop calls `install()` only on a fresh install.
+- Module version reported in the status panel and in the API `User-Agent`, from a single constant
+  (`Support\Version::MODULE`) instead of a literal that could drift.
+
 ## [0.1.0] - 2026-09-14
 
 ### Added

@@ -1,0 +1,49 @@
+name: Release
+
+# Publishes the installable ZIP as a GitHub release asset. This is the source of truth for the
+# update channel: BillTo relays the latest release through /api/v1/plugins/prestashop/latest and
+# installed modules check that endpoint from their configuration page. A release without the
+# attached ZIP reaches nobody, so the build runs on the tag itself.
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build and publish ZIP
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check the tag matches the module version
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          PHP_VERSION=$(grep -oP "const MODULE = '\K[^']+" src/Support/Version.php)
+          XML_VERSION=$(grep -oP '<version><!\[CDATA\[\K[^]]+' config.xml)
+          echo "tag=$TAG php=$PHP_VERSION xml=$XML_VERSION"
+          test "$TAG" = "$PHP_VERSION" && test "$TAG" = "$XML_VERSION"
+
+      - name: Check the upgrade script for this version exists
+        # PrestaShop runs only upgrade/upgrade-*.php when a module is updated, so a release whose
+        # version has no script silently skips every schema change it needs.
+        run: test -f "upgrade/upgrade-${GITHUB_REF_NAME#v}.php"
+
+      - name: Build
+        run: |
+          mkdir -p build/billtoinvoices
+          rsync -a --exclude='.git' --exclude='.github' --exclude='tests' --exclude='vendor' --exclude='bin' --exclude='build' \
+            --exclude='composer.json' --exclude='composer.lock' --exclude='phpunit.xml' --exclude='.gitignore' \
+            --exclude='README.md' --exclude='CHANGELOG.md' --exclude='DEVELOPMENT.md' --exclude='*.local.md' \
+            ./ build/billtoinvoices/
+          cd build && zip -rq billtoinvoices.zip billtoinvoices
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: build/billtoinvoices.zip
+          generate_release_notes: true

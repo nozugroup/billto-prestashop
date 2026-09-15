@@ -19,6 +19,7 @@ use BillTo\PrestaShop\Support\Config;
 use BillTo\PrestaShop\Support\Logger;
 use BillTo\PrestaShop\Support\OrderRecord;
 use BillTo\PrestaShop\Support\PdfStorage;
+use BillTo\PrestaShop\Support\Version;
 use BillTo\PrestaShop\Sync\OrderAdapter;
 use BillTo\PrestaShop\Sync\OrderSync;
 use BillTo\PrestaShop\Sync\Queue;
@@ -40,7 +41,7 @@ class BilltoInvoices extends Module
     {
         $this->name = 'billtoinvoices';
         $this->tab = 'billing_invoicing';
-        $this->version = '0.1.0';
+        $this->version = Version::MODULE;
         $this->author = 'BillTo';
         $this->need_instance = 0;
         $this->ps_versions_compliancy = ['min' => '1.7.6.0', 'max' => _PS_VERSION_];
