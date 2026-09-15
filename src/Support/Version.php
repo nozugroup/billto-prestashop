@@ -12,5 +12,5 @@ namespace BillTo\PrestaShop\Support;
  */
 final class Version
 {
-    const MODULE = '0.1.0';
+    const MODULE = '0.2.0';
 }
