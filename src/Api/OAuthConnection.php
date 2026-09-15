@@ -191,6 +191,21 @@ final class OAuthConnection
         // na firmę, nie wyrejestrowanie sklepu. Ponowne połączenie ma pominąć rejestrację.
     }
 
+    /**
+     * Kasuje TAKŻE poświadczenia instalacji.
+     *
+     * Do zmiany środowiska: client_id i sekret wydane w produkcji nie znaczą nic w sandboksie
+     * (to odrębne instancje z własnymi rejestrami), więc zostawienie ich dałoby sklep
+     * „połączony", który przy każdym żądaniu dostaje 401.
+     */
+    public function forget(): void
+    {
+        $this->disconnect();
+
+        $this->config->set(self::KEY_CLIENT_ID, '');
+        $this->config->set(self::KEY_CLIENT_SECRET, '');
+    }
+
     private function tokens(): ?TokenSet
     {
         return TokenSet::fromArray([

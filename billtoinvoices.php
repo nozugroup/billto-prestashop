@@ -241,12 +241,12 @@ class BilltoInvoices extends Module
         $module = $this;
 
         return static function () use ($config, $module) {
-            // OAuth ma PIERWSZENSTWO, ale wklejony token zostaje jako droga zgodnosci: sklepy
-            // podlaczone przed przejsciem na OAuth maja go w konfiguracji, a wylaczenie tej
-            // sciezki zatrzymaloby im wystawianie faktur w dniu aktualizacji modulu.
-            $token = $module->oauthConnection()->accessToken();
-
-            return new Client($token !== null ? $token : $config->token(), $config->baseUrl(), new Logger());
+            // WYLACZNIE OAuth. Wklejanie tokenu API do modulu znaczylo oddanie sklepowi
+            // dlugowiecznego poswiadczenia CALEJ firmy - bez wezszego zakresu i bez mozliwosci
+            // odebrania dostepu inaczej niz przez skasowanie tokenu uzywanego byc moze przez
+            // cos jeszcze. Po polaczeniu sklep dostaje token JEDNEJ firmy, o zakresie, ktory
+            // wlasciciel widzial na ekranie zgody i moze cofnac po stronie BillTo.
+            return new Client((string) $module->oauthConnection()->accessToken(), $config->baseUrl(), new Logger());
         };
     }
 

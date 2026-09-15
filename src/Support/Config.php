@@ -36,7 +36,8 @@ final class Config
     public static function defaults(): array
     {
         return [
-            'TOKEN' => '',
+            // Bez 'TOKEN': sklep laczy sie wylacznie przez OAuth. Wklejony token API to
+            // dlugowieczne poswiadczenie calej firmy trzymane w bazie sklepu.
             'ENVIRONMENT' => self::ENV_PRODUCTION,
             'CUSTOM_URL' => '',
             'INVOICE_MODE' => self::MODE_ALL,
@@ -118,11 +119,6 @@ final class Config
         $position = strpos($base, '/api/');
 
         return $position === false ? rtrim($base, '/') : rtrim(substr($base, 0, $position), '/');
-    }
-
-    public function token(): string
-    {
-        return trim((string) $this->get('TOKEN'));
     }
 
     public function baseUrl(): string

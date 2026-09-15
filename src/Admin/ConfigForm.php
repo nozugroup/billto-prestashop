@@ -174,6 +174,7 @@ final class ConfigForm
     private function save(): string
     {
         $errors = [];
+        $baseUrlBefore = $this->config->baseUrl();
 
         $lists = ['PAID_STATES', 'SETTLE_STATES', 'UNPAID_MODULES'];
         $bools = ['CREATE_ON_CHECKOUT', 'KSEF_AUTO', 'REFUND_CORRECTIONS', 'EU_B2B_ENABLED', 'NON_EU_ENABLED', 'RESYNC_ON_EDIT', 'UNTAXED_EXTRAS_FOLLOW_GOODS', 'FOREIGN_TAXED_FOLLOWS_SHOP'];
@@ -190,11 +191,6 @@ final class ConfigForm
             }
 
             $value = trim((string) Tools::getValue($field));
-
-            // An empty token field means "keep the current token" (the field is never pre-filled).
-            if ($key === 'TOKEN' && $value === '') {
-                continue;
-            }
 
             $this->config->set($key, $value);
         }
@@ -216,13 +212,23 @@ final class ConfigForm
             return $this->module->displayError(implode('<br>', $errors));
         }
 
+        // Produkcja, sandbox i własny adres to ODRĘBNE instancje BillTo: poświadczenia wydane
+        // w jednej nie znaczą nic w drugiej. Zostawienie ich po zmianie środowiska dawałoby
+        // sklep „połączony", który przy każdym żądaniu dostaje 401.
+        if ($this->config->baseUrl() !== $baseUrlBefore && $this->module->oauthConnection()->isConnected()) {
+            $this->module->oauthConnection()->forget();
+
+            return $this->module->displayConfirmation($this->module->l('Ustawienia zapisane.', 'configform'))
+                . $this->module->displayWarning($this->module->l('Zmiana środowiska rozłączyła sklep z BillTo. Połącz go ponownie - poświadczenia z poprzedniego środowiska tam nie działają.', 'configform'));
+        }
+
         return $this->module->displayConfirmation($this->module->l('Ustawienia zapisane.', 'configform'));
     }
 
     private function statusPanel(): string
     {
-        // Ten sam klient co w synchronizacji (OAuth, a wklejony token jako droga zgodności) -
-        // inaczej panel diagnostyczny opisuje inne połączenie niż to, którym moduł wystawia faktury.
+        // Ten sam klient co w synchronizacji - inaczej panel diagnostyczny opisuje inne
+        // połączenie niż to, którym moduł faktycznie wystawia faktury.
         $client = $this->module->apiClient();
         $connected = $this->module->oauthConnection()->isConnected();
         $rows = [];
@@ -231,11 +237,11 @@ final class ConfigForm
             $this->module->l('Poświadczenia', 'configform'),
             $connected
                 ? '<span class="text-success">&#10003; ' . $this->module->l('połączenie OAuth', 'configform') . '</span>'
-                : $this->module->l('wklejony token API (droga zgodności)', 'configform'),
+                : '<span class="text-danger">' . $this->module->l('brak - sklep nie jest połączony', 'configform') . '</span>',
         ];
 
         if (!$client->isConfigured()) {
-            $rows[] = [$this->module->l('Token API', 'configform'), '<span class="text-danger">' . $this->module->l('brak - połącz sklep z BillTo albo wklej token poniżej', 'configform') . '</span>'];
+            $rows[] = [$this->module->l('Połączenie', 'configform'), '<span class="text-danger">' . $this->module->l('użyj „Połącz z BillTo" powyżej', 'configform') . '</span>'];
         } else {
             try {
                 $series = $client->get(ApiPaths::invoiceSeries(), ['type' => 'VAT']);
@@ -302,8 +308,10 @@ final class ConfigForm
             'form' => [
                 'legend' => ['title' => $l('BillTo - konfiguracja'), 'icon' => 'icon-cogs'],
                 'input' => [
-                    ['type' => 'password', 'label' => $l('Token API'), 'name' => 'BILLTO_TOKEN', 'desc' => $l('BillTo: Ustawienia -> API tokens. Uprawnienia: orders:read, orders:write, invoices:read, invoices:write (+ ksef:send przy automatycznej wysyłce do KSeF). Zostaw puste, aby nie zmieniać.')],
-                    ['type' => 'select', 'label' => $l('Środowisko'), 'name' => 'BILLTO_ENVIRONMENT', 'options' => ['query' => [['id' => Config::ENV_PRODUCTION, 'name' => $l('Produkcja (billto.pl)')], ['id' => Config::ENV_SANDBOX, 'name' => $l('Sandbox (sandbox.billto.pl)')], ['id' => Config::ENV_CUSTOM, 'name' => $l('Własny adres API')]], 'id' => 'id', 'name' => 'name']],
+                    // Pola tokenu API już NIE MA: sklep łączy się wyłącznie przez OAuth. Wklejony
+                    // token to długowieczne poświadczenie CAŁEJ firmy w bazie sklepu, którego
+                    // właściciel nie umie ani zawęzić, ani odebrać osobno.
+                    ['type' => 'select', 'label' => $l('Środowisko'), 'name' => 'BILLTO_ENVIRONMENT', 'options' => ['query' => [['id' => Config::ENV_PRODUCTION, 'name' => $l('Produkcja (billto.pl)')], ['id' => Config::ENV_SANDBOX, 'name' => $l('Sandbox (sandbox.billto.pl)')], ['id' => Config::ENV_CUSTOM, 'name' => $l('Własny adres API')]], 'id' => 'id', 'name' => 'name'], 'desc' => $l('Produkcja i sandbox to ODRĘBNE konta BillTo. Zmiana środowiska rozłącza sklep - połącz go ponownie.')],
                     ['type' => 'text', 'label' => $l('Własny adres API'), 'name' => 'BILLTO_CUSTOM_URL'],
 
                     ['type' => 'select', 'label' => $l('Dla których zamówień'), 'name' => 'BILLTO_INVOICE_MODE', 'options' => ['query' => [['id' => Config::MODE_ALL, 'name' => $l('Wszystkie zamówienia (sklep bez kasy fiskalnej)')], ['id' => Config::MODE_VAT_NUMBER, 'name' => $l('Tylko gdy klient podał NIP / numer VAT w adresie')]], 'id' => 'id', 'name' => 'name']],
@@ -360,8 +368,6 @@ final class ConfigForm
                 $values[$name . '[]'] = $this->config->{$key === 'PAID_STATES' ? 'paidStates' : 'settleStates'}();
             } elseif ($key === 'UNPAID_MODULES') {
                 $values[$name . '[]'] = $this->config->unpaidModules();
-            } elseif ($key === 'TOKEN') {
-                $values[$name] = '';
             } else {
                 $values[$name] = $value;
             }
@@ -386,7 +392,7 @@ final class ConfigForm
     /** Lists the team's series of a type (id + name) so the merchant can copy the id. */
     private function seriesHint(string $type): string
     {
-        $client = new Client($this->config->token(), $this->config->baseUrl(), new Logger());
+        $client = $this->module->apiClient();
 
         if (!$client->isConfigured()) {
             return '';
