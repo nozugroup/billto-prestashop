@@ -1,0 +1,48 @@
+name: Release
+
+# Publishes the installable ZIP as a GitHub release asset. BillTo relays the latest release
+# through /api/v1/plugins/prestashop/latest, which installed modules query from their
+# configuration page. The ZIP is built from the tag.
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build and publish ZIP
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check the tag matches the module version
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          PHP_VERSION=$(grep -oP "const MODULE = '\K[^']+" src/Support/Version.php)
+          XML_VERSION=$(grep -oP '<version><!\[CDATA\[\K[^]]+' config.xml)
+          echo "tag=$TAG php=$PHP_VERSION xml=$XML_VERSION"
+          test "$TAG" = "$PHP_VERSION" && test "$TAG" = "$XML_VERSION"
+
+      - name: Check the upgrade script for this version exists
+        # PrestaShop runs only upgrade/upgrade-*.php when a module is updated, so every release
+        # needs a script for its version.
+        run: test -f "upgrade/upgrade-${GITHUB_REF_NAME#v}.php"
+
+      - name: Build
+        run: |
+          mkdir -p build/billtoinvoices
+          rsync -a --exclude='.git' --exclude='.github' --exclude='tests' --exclude='vendor' --exclude='bin' --exclude='build' \
+            --exclude='composer.json' --exclude='composer.lock' --exclude='phpunit.xml' --exclude='.gitignore' \
+            --exclude='README.md' --exclude='CHANGELOG.md' --exclude='DEVELOPMENT.md' --exclude='*.local.md' \
+            ./ build/billtoinvoices/
+          cd build && zip -rq billtoinvoices.zip billtoinvoices
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: build/billtoinvoices.zip
+          generate_release_notes: true

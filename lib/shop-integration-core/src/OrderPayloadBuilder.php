@@ -1,0 +1,245 @@
+<?php
+
+namespace BillTo\Shop;
+
+use BillTo\Shop\Model\Line;
+use BillTo\Shop\Model\Order;
+
+/**
+ * Builds the body of `POST /orders` (BillTo API v1) from a shop order.
+ *
+ * Result: `['payload' => array, 'lineMap' => array<string, int>, 'hasNegativeLines' => bool]`
+ * where `lineMap` maps the platform line id to the BillTo `line_number` (1-based), needed later
+ * to build refund corrections.
+ */
+final class OrderPayloadBuilder
+{
+    /** @var Settings */
+    private $settings;
+
+    /** @var string[] Settings::WARNING_* codes collected while building the current order */
+    private $warnings = [];
+
+    public function __construct(Settings $settings)
+    {
+        $this->settings = $settings;
+    }
+
+    /**
+     * `blocker` is a Settings::BLOCKER_* code when the order must not be sent as is (the plugin
+     * records the matching message), null otherwise. `warnings` lists Settings::WARNING_* codes:
+     * the payload is consistent with what the shop charged, but not what the buyer scenario would
+     * normally produce, so the merchant should look at the order (and usually at the shop's tax rules).
+     *
+     * @param string|null $viesStatus Result of the VIES check for EU companies, or null
+     * @return array{payload: array<string, mixed>, lineMap: array<string, int>, hasNegativeLines: bool, scenario: string, blocker: string|null, warnings: string[]}
+     */
+    public function build(Order $order, ?string $viesStatus = null, bool $confirmed = true): array
+    {
+        $this->warnings = [];
+        $scenario = BuyerScenario::effective($order->buyer, $this->settings, $viesStatus);
+
+        if ($scenario === BuyerScenario::EU_B2B_DOMESTIC && $viesStatus === Vies\Vies::INVALID) {
+            $this->warnings[] = Settings::WARNING_VIES_INVALID_DOMESTIC;
+        }
+
+        // The shop charged VAT to a foreign buyer: map with Polish rates so the invoice total
+        // matches the payment.
+        if ($this->settings->foreignTaxedFollowsShop && $this->highestProductRate($order) !== null) {
+            if ($scenario === BuyerScenario::EU_B2B) {
+                $scenario = BuyerScenario::EU_B2B_DOMESTIC;
+                $this->warnings[] = Settings::WARNING_FOREIGN_TAXED;
+            } elseif ($scenario === BuyerScenario::NON_EU) {
+                $scenario = BuyerScenario::NON_EU_DOMESTIC;
+                $this->warnings[] = Settings::WARNING_FOREIGN_TAXED;
+            }
+        }
+
+        $lines = $this->lines($order, $scenario);
+        $hasNegative = NegativeLines::hasNegative($lines);
+        $blocker = $this->blocker($order, $scenario);
+
+        if ($hasNegative && $this->settings->negativeLines === Settings::NEGATIVE_DISTRIBUTE) {
+            $lines = NegativeLines::distribute($lines, $this->settings->discountSuffix);
+        }
+
+        $items = [];
+        $lineMap = [];
+
+        foreach (array_values($lines) as $index => $line) {
+            $lineMap[(string) $line['_id']] = $index + 1;
+            unset($line['_id'], $line['_net_total'], $line['_gross_total'], $line['_is_product']);
+            $items[] = $line;
+        }
+
+        $payload = [
+            'external_id' => $order->externalId,
+            'source' => $this->settings->source,
+            'status' => $confirmed ? 'confirmed' : 'draft',
+            'send_confirmation' => false,
+            'currency' => $order->currency,
+            'order_date' => $order->date,
+            'amount_entry_mode' => $this->settings->amountMode,
+            'buyer' => $this->buyer($order),
+            'items' => $items,
+            'notes' => $this->notes($order),
+        ];
+
+        $warnings = array_values(array_unique($this->warnings));
+
+        if ($warnings !== []) {
+            // BillTo shows them on the order and in the integrations hub (API: integration_warnings).
+            $payload['integration_warnings'] = $warnings;
+        }
+
+        return [
+            'payload' => $payload,
+            'lineMap' => $lineMap,
+            'hasNegativeLines' => $hasNegative,
+            'scenario' => $scenario,
+            'blocker' => $blocker,
+            'warnings' => $warnings,
+        ];
+    }
+
+    /** Highest positive tax percentage among the product lines, null when no product carries VAT. */
+    private function highestProductRate(Order $order): ?float
+    {
+        $rate = null;
+
+        foreach ($order->lines as $line) {
+            if ($line->isProduct() && $line->quantity > 0 && $line->taxPercent !== null && $line->taxPercent > 0.0) {
+                $rate = $rate === null ? $line->taxPercent : max($rate, $line->taxPercent);
+            }
+        }
+
+        return $rate;
+    }
+
+    /**
+     * An EU consumer invoiced with Polish rates must carry VAT. A line without VAT means the shop
+     * has no tax rule for that country; the setting decides whether that blocks the order or maps
+     * to the zero-rate types used by VAT-exempt sellers.
+     */
+    private function blocker(Order $order, string $scenario): ?string
+    {
+        if ($scenario !== BuyerScenario::EU_B2C
+            || $this->settings->ossMode !== Settings::OSS_PL_VAT
+            || $this->settings->euConsumerNoVat !== Settings::EU_CONSUMER_NO_VAT_BLOCK) {
+            return null;
+        }
+
+        foreach ($order->lines as $line) {
+            if ($line->netTotal > 0 && ($line->taxPercent === null || $line->taxPercent <= 0.0)) {
+                return Settings::BLOCKER_EU_CONSUMER_NO_VAT;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function buyer(Order $order): array
+    {
+        $buyer = $order->buyer;
+        $identity = BuyerScenario::taxIdentity($buyer);
+
+        $payload = [
+            'name' => $buyer->name,
+            'tax_type' => $identity[0],
+            'tax_number' => $identity[1],
+            'tax_country' => $identity[2],
+            'country_code' => $buyer->country,
+            'address_line_1' => $buyer->addressLine1 !== '' ? $buyer->addressLine1 : null,
+            'address_line_2' => $buyer->addressLine2 !== '' ? $buyer->addressLine2 : null,
+            'phone' => $buyer->phone !== '' ? substr($buyer->phone, 0, 32) : null,
+            'email' => filter_var($buyer->email, FILTER_VALIDATE_EMAIL) !== false ? $buyer->email : null,
+        ];
+
+        return array_filter($payload, static function ($value) {
+            return $value !== null && $value !== '';
+        });
+    }
+
+    /**
+     * Internal line arrays with `_id`, `_net_total`, `_gross_total`, `_is_product` markers.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function lines(Order $order, string $scenario): array
+    {
+        $gross = $this->settings->isGross();
+        $hasGoods = $order->hasGoods();
+        $goodsRate = $this->highestProductRate($order);
+        $result = [];
+
+        foreach ($order->lines as $line) {
+            if ($line->quantity <= 0 && $line->isProduct()) {
+                continue;
+            }
+
+            if (! $line->isProduct() && abs($line->netTotal) < 0.00001) {
+                continue; // free shipping / zero fee
+            }
+
+            $quantity = $line->isProduct() ? $line->quantity : 1.0;
+            // Shipping and fees follow the goods; a services-only order has nothing to ship.
+            $isService = $line->isProduct() ? $line->isService : ($line->type === Line::TYPE_FEE ? true : ! $hasGoods);
+            $name = $line->type === Line::TYPE_SHIPPING ? $this->settings->shippingLabel.': '.$line->name : $line->name;
+
+            // Shipping / fee left untaxed by the shop while the goods carry VAT: as an ancillary supply it takes
+            // the rate of the goods (Polish VAT), so follow the highest product rate instead of zw / 0%.
+            $followsGoods = $this->settings->untaxedExtrasFollowGoods
+                && ! $line->isProduct()
+                && $line->netTotal > 0
+                && ($line->taxPercent === null || $line->taxPercent <= 0.0)
+                && $goodsRate !== null
+                && $scenario !== BuyerScenario::EU_B2B
+                && $scenario !== BuyerScenario::NON_EU;
+
+            if ($followsGoods) {
+                $this->warnings[] = Settings::WARNING_UNTAXED_EXTRAS;
+            }
+
+            $item = [
+                'name' => mb_substr($name, 0, 255),
+                'quantity' => round($quantity, 3),
+                // Shipping and fees are services on the document even when their VAT follows the goods.
+                'units' => $line->isProduct() && ! $line->isService ? 'szt.' : 'usł.',
+                'unit_price' => round($line->netTotal / $quantity, 4),
+                'vat_type' => $followsGoods
+                    ? VatMapper::domestic($goodsRate, $this->settings)
+                    : VatMapper::forLine($line, $scenario, $isService, $this->settings),
+                '_id' => $line->id,
+                '_net_total' => round($line->netTotal, 2),
+                '_gross_total' => round($line->grossTotal, 2),
+                '_is_product' => $line->isProduct(),
+            ];
+
+            if ($gross) {
+                $item['unit_price_gross'] = round($line->grossTotal / $quantity, 4);
+            }
+
+            $result[] = $item;
+        }
+
+        return $result;
+    }
+
+    private function notes(Order $order): string
+    {
+        $parts = [$this->settings->orderNoteLabel.' #'.$order->number];
+
+        if ($order->paymentTitle !== '') {
+            $parts[] = 'Płatność: '.$order->paymentTitle;
+        }
+
+        if (trim($order->customerNote) !== '') {
+            $parts[] = mb_substr(trim($order->customerNote), 0, 1000);
+        }
+
+        return mb_substr(implode(' | ', $parts), 0, 5000);
+    }
+}
